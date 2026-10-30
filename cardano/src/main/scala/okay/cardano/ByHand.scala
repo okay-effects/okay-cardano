@@ -14,6 +14,9 @@ import scalus.cardano.onchain.plutus.prelude.{List as PList, Option as POption}
 object ByHand:
   enum Purpose:
     case Spend(ownRef: TxOutRef, datum: Option[Data], lovelace: BigInt)
+    /** an output as it is on the chain (its address, value, datum or datum hash), spent; `datum` the one the
+     * spending transaction gives (inline in the output, or the datum of its hash) */
+    case SpendOutput(ownRef: TxOutRef, output: TxOut, datum: Option[Data])
     case Mint
 
   /** a payment: to a key's address, lovelace, a datum inline if any */
@@ -40,6 +43,8 @@ object ByHand:
         val own = TxOut(Address.fromScriptHash(scriptHash), Value.lovelace(lovelace),
           datum.fold(OutputDatum.NoOutputDatum)(OutputDatum.OutputDatum(_)))
         (PList(TxInInfo(ref, own)), ScriptInfo.SpendingScript(ref, datum.fold(POption.None)(POption.Some(_))))
+      case Purpose.SpendOutput(ref, out, datum) =>
+        (PList(TxInInfo(ref, out)), ScriptInfo.SpendingScript(ref, datum.fold(POption.None)(POption.Some(_))))
       case Purpose.Mint => (PList.Nil, ScriptInfo.MintingScript(scriptHash))
     val others = f.spends.map(r => TxInInfo(r, TxOut(Address.fromPubKeyHash(PubKeyHash(ByteString.fromArray(
       Array.fill(28)(0.toByte)))), Value.lovelace(2_000_000), OutputDatum.NoOutputDatum)))

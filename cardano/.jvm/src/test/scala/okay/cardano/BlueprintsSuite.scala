@@ -25,7 +25,8 @@ class BlueprintsSuite extends munit.FunSuite:
   test("Scalus's blueprint: four validators, their schemas, the NFT's parameter"):
     assertEquals(scalusOnes.validators.map(_.title), List("Escrow", "Multisig", "One-shot NFT", "Vesting"))
     val escrow = scalusOnes.validators.head
-    val fields = escrow.datum.collect { case Schema.Constr(_, 0, fs) => fs.map(f => (f.title, f.getClass.getSimpleName)) }
+    val fields = escrow.datum.collect { case Schema.Constr(_, 0, fs) =>
+      fs.map(f => (f.title, f.getClass.getSimpleName)) }
     assertEquals(fields,
       Some(List("seller" -> "Bytes", "buyer" -> "Bytes", "price" -> "Integer", "deadline" -> "Integer")))
     assertEquals(escrow.redeemer match { case Schema.AnyOf(_, alts) => alts.map(_.title); case _ => Nil },

@@ -19,7 +19,8 @@ Async.start(InThePage.fetching(Chain.overFetch(scripts[App](hash))))
 ```
 
 - **`Chain`** — `Load(source, hash)`: a transaction and the transactions that made its inputs (spent, referenced,
-  collateral); `Transactions(source, hashes)`. `Chain.overFetch` asks a `Source` through okay-http's `Fetch`:
+  collateral); `Transactions(source, hashes)`; `Utxos(source, address)`, `ScriptOf(source, hash)`,
+  `DatumOf(source, hash)`. `Chain.overFetch` asks a `Source` through okay-http's `Fetch`:
   Blockfrost (`/txs/{hash}/cbor`, the project id as `project_id`) or any API of its shape (Yaci DevKit), Koios
   (`/tx_cbor`, one batch; not from a browser: its answers carry no CORS header).
 - **`Contexts`** — each Plutus V3 redeemer's script applied to the `ScriptContext` the ledger builds for it (Scalus's
