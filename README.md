@@ -32,6 +32,9 @@ Async.start(InThePage.fetching(Chain.overFetch(scripts[App](hash))))
   validator's purpose, datum / redeemer / parameter schemas as data, its program with parameters applied, its hash.
 - **`ByHand`** — a script context with no transaction yet: signatories, validity range, mint, payments, other
   inputs; for a spend the script's own input holding the datum.
+- **`CaseFile`** — a script run as a file (script, context, Scala source map when compiled with positions), for a
+  debugger: a Scalus test writes one for a failing case (`CaseFile.of(..., ProjectFiles.read)`), okay-uplc opens it.
+  **`SourceMap`** — Scala positions per term (pre-order), the lines around them.
 - **`Network`** — mainnet, preprod, preview: Scalus's chain parameters and the public APIs. **`Recorded`** — `Fetch`
   answered from a recording, for tests.
 
