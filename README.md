@@ -23,9 +23,10 @@ Async.start(InThePage.fetching(Chain.overFetch(scripts[App](hash))))
   `DatumOf(source, hash)`. `Chain.overFetch` asks a `Source` through okay-http's `Fetch`:
   Blockfrost (`/txs/{hash}/cbor`, the project id as `project_id`) or any API of its shape (Yaci DevKit), Koios
   (`/tx_cbor`, one batch; not from a browser: its answers carry no CORS header).
-- **`Contexts`** — each Plutus V3 redeemer's script applied to the `ScriptContext` the ledger builds for it (Scalus's
-  `PlutusScriptEvaluator.buildScriptContexts`), with the ExUnits the transaction declares. Checked on real mainnet
-  transactions: every script passes at exactly its declared cost.
+- **`Contexts`** — each redeemer's script (Plutus V1, V2, V3) with the arguments the ledger gives it — the
+  `ScriptContext` it builds (Scalus's `PlutusScriptEvaluator.buildScriptContexts`), a V1/V2 spend's datum and redeemer
+  too — and the ExUnits the transaction declares. Checked on real mainnet transactions (V2 and V3): every script
+  passes at exactly its declared cost.
 - **`CliFiles`** — what cardano-cli writes: a transaction's text envelope (or CBOR hex) and `query utxo
   --output-json`, so a transaction the node refused, which has no hash on chain, can still be run.
 - **`Blueprints`** — CIP-57 `plutus.json`, Scalus's or Aiken's (`$ref`s into `definitions` followed): each
