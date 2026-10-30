@@ -12,8 +12,11 @@ import scalus.uplc.builtin.Data.toData
  */
 object Contexts:
 
-  /** a script of the transaction: what it is for, its hash, the applied program, what the transaction says it costs */
-  final case class Run(purpose: String, hash: String, program: DeBruijnedProgram, declared: ExUnits)
+  /** a script of the transaction: what it is for, its hash, the script and the context it is run on, what the
+   * transaction says it costs; `program` the script applied to the context */
+  final case class Run(purpose: String, hash: String, script: DeBruijnedProgram,
+    context: scalus.cardano.onchain.plutus.v3.ScriptContext, declared: ExUnits):
+    def program: DeBruijnedProgram = script $ context.toData
 
   /** the inputs whose outputs the contexts need: spent, referenced and collateral */
   def inputs(tx: Transaction): Seq[TransactionInput] =
@@ -38,7 +41,7 @@ object Contexts:
       val purpose = s"${tag.toString.toLowerCase} #$index"
       (scripts.get(hash), contexts.get((tag, index))) match
         case (Some(s: Script.PlutusV3), Some((r, ctx: scalus.cardano.onchain.plutus.v3.ScriptContext))) =>
-          List(Right(Run(purpose, hash.toHex, s.deBruijnedProgram $ ctx.toData, r.exUnits)))
+          List(Right(Run(purpose, hash.toHex, s.deBruijnedProgram, ctx, r.exUnits)))
         case (Some(other: PlutusScript), _) =>
           List(Left(s"$purpose: a ${other.language} script, not run yet (Plutus V3 only)"))
         case _ => Nil
