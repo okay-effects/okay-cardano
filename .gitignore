@@ -1,0 +1,8 @@
+target/
+.bsp/
+.idea/
+.metals/
+.bloop/
+project/project/
+node_modules/
+package-lock.json
