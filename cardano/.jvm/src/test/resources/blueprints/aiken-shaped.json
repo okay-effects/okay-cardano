@@ -1,0 +1,92 @@
+{
+  "preamble": {
+    "title": "acme/vesting",
+    "version": "0.0.0",
+    "plutusVersion": "v3",
+    "compiler": {
+      "name": "Aiken",
+      "version": "v1.1.17"
+    },
+    "license": "Apache-2.0"
+  },
+  "validators": [
+    {
+      "title": "vesting.vesting.spend",
+      "datum": {
+        "title": "datum",
+        "schema": {
+          "$ref": "#/definitions/vesting~1VestingDatum"
+        }
+      },
+      "redeemer": {
+        "title": "redeemer",
+        "schema": {
+          "$ref": "#/definitions/vesting~1Action"
+        }
+      },
+      "compiledCode": "5901150101009800abd8aab9daba1aab9eaba2488888c88c8c8ca4c0240066c90034c8c8ca4c030dd50014c8ca4cc028008dd718069805801da9324cdc49bad300c3006002329300e001b4dd698069806000d86ea8c030c02cdd5180618059baa300c3300e48038006d49860146ea8c02c01a64652660140046eb8c03400ed499266e24ca4c038006d375a601a601800361baa300c300b37546018601460166ea8c030cc039200e001375a6018600c0056a4c300a3754601600c300937540046012600e008652601400330093008001b0dd5180418031803800dad6b0dd51803980080118042400860086ea800488cc88cc8c0040048a400645266ebc008016660080080034a2a500011bac30053300748040008dd480081",
+      "hash": "96e98706b3d6ba6ed78efbfaa7911aed7eb192da9d3efadc11d69669"
+    },
+    {
+      "title": "vesting.vesting.else",
+      "redeemer": {
+        "schema": {}
+      },
+      "compiledCode": "5901150101009800abd8aab9daba1aab9eaba2488888c88c8c8ca4c0240066c90034c8c8ca4c030dd50014c8ca4cc028008dd718069805801da9324cdc49bad300c3006002329300e001b4dd698069806000d86ea8c030c02cdd5180618059baa300c3300e48038006d49860146ea8c02c01a64652660140046eb8c03400ed499266e24ca4c038006d375a601a601800361baa300c300b37546018601460166ea8c030cc039200e001375a6018600c0056a4c300a3754601600c300937540046012600e008652601400330093008001b0dd5180418031803800dad6b0dd51803980080118042400860086ea800488cc88cc8c0040048a400645266ebc008016660080080034a2a500011bac30053300748040008dd480081",
+      "hash": "96e98706b3d6ba6ed78efbfaa7911aed7eb192da9d3efadc11d69669"
+    }
+  ],
+  "definitions": {
+    "ByteArray": {
+      "dataType": "bytes"
+    },
+    "Int": {
+      "dataType": "integer"
+    },
+    "VerificationKeyHash": {
+      "title": "VerificationKeyHash",
+      "dataType": "bytes"
+    },
+    "vesting/VestingDatum": {
+      "title": "VestingDatum",
+      "anyOf": [
+        {
+          "title": "VestingDatum",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "owner",
+              "$ref": "#/definitions/VerificationKeyHash"
+            },
+            {
+              "title": "beneficiary",
+              "$ref": "#/definitions/VerificationKeyHash"
+            },
+            {
+              "title": "deadline",
+              "$ref": "#/definitions/Int"
+            }
+          ]
+        }
+      ]
+    },
+    "vesting/Action": {
+      "title": "Action",
+      "anyOf": [
+        {
+          "title": "Claim",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "Cancel",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        }
+      ]
+    }
+  }
+}

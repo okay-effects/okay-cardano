@@ -1,0 +1,207 @@
+{
+  "preamble": {
+    "title": "scalus-validators",
+    "version": "0.1.0-SNAPSHOT",
+    "compiler": {
+      "name": "scalus",
+      "version": "1.4.0"
+    },
+    "plutusVersion": "v3"
+  },
+  "validators": [
+    {
+      "title": "Escrow",
+      "description": "The buyer releases the price to the seller, or takes it back after the deadline.",
+      "redeemer": {
+        "title": "EscrowAction",
+        "schema": {
+          "title": "EscrowAction",
+          "anyOf": [
+            {
+              "dataType": "constructor",
+              "title": "Release",
+              "index": 0,
+              "fields": [
+                
+              ]
+            },
+            {
+              "dataType": "constructor",
+              "title": "Refund",
+              "index": 1,
+              "fields": [
+                
+              ]
+            }
+          ]
+        }
+      },
+      "datum": {
+        "title": "EscrowDatum",
+        "schema": {
+          "dataType": "constructor",
+          "title": "EscrowDatum",
+          "fields": [
+            {
+              "dataType": "bytes",
+              "title": "seller"
+            },
+            {
+              "dataType": "bytes",
+              "title": "buyer"
+            },
+            {
+              "dataType": "integer",
+              "title": "price"
+            },
+            {
+              "dataType": "integer",
+              "title": "deadline"
+            }
+          ]
+        }
+      },
+      "compiledCode": "5901660101009800abd8aab9daba1aba0aab9eaba248888888c8c8ca4c0240066c90034c8c8c8ca4c034dd518061804803cc8ca4cc8a64c044dd51991800800914800c8a4c01400a660080080033374a90001980980125eb814c0103d87a8000001528528a9469406eb0c038c0200108ca64cdd7980818071baa3010001004a5099b89375a6020601400f300148900a441009be33010300d0015ef94a13293012001a50a5099baf3011300f0010041baa3010300a00118069baa001b526180680299ba548000cc02cc03000d2f5c19337126eb4c030cc0392006003329300e001b4dd698069805800d86ea8c030c028dd5180618051baa300c3300e4803800ad49893322332300100122900191499baf00200599802002000d28a9400046eb0c02ccc035201000137526eb8c02cc02000ad49860106ea8c028014c01cdd51949805800cc028c020006c37546012600c002600c0036b5ac3754600e60020046010900218019baa00101",
+      "hash": "79ac3ebc488852f63dfa4c778d2e7505f24dd1648a7b4c9d6ee97620"
+    },
+    {
+      "title": "Multisig",
+      "description": "A treasury spent by any threshold of its signers.",
+      "redeemer": {
+        "schema": {
+          "dataType": "#unit"
+        }
+      },
+      "datum": {
+        "title": "MultisigDatum",
+        "schema": {
+          "dataType": "constructor",
+          "title": "MultisigDatum",
+          "fields": [
+            {
+              "dataType": "list",
+              "title": "signers"
+            },
+            {
+              "dataType": "integer",
+              "title": "threshold"
+            }
+          ]
+        }
+      },
+      "compiledCode": "58cc0101009800abd8aab9daba1aab9eaba24888888c8ca4c01c0066c90034c8c8ca4cdc48011bad33229800911480148a600200b00199911ba8930080018014cdc000124004375a006004802a002801530101000048c0040046eb0c024cc02d201030083754601200a4664466460020024520032293375e00400b33004004001a515280008dd618050021ba9375c0036a4c9337109000000da930dd69803980280098029baa329300800198039803000d86ea8c018c010c014006d6b586ea8c014cc01d20040013003375400201",
+      "hash": "dcc66e65e75e011e94092cf7cbe137ff3c82ce08a41f5d42185c93d5"
+    },
+    {
+      "title": "One-shot NFT",
+      "description": "A minting policy parameterized by a seed UTxO: it can mint one token, once.",
+      "redeemer": {
+        "title": "NftAction",
+        "schema": {
+          "title": "NftAction",
+          "anyOf": [
+            {
+              "dataType": "constructor",
+              "title": "Mint",
+              "index": 0,
+              "fields": [
+                {
+                  "dataType": "bytes",
+                  "title": "name"
+                }
+              ]
+            },
+            {
+              "dataType": "constructor",
+              "title": "Burn",
+              "index": 1,
+              "fields": [
+                
+              ]
+            }
+          ]
+        }
+      },
+      "datum": {
+        "schema": {
+          "dataType": "#unit"
+        }
+      },
+      "parameters": [
+        {
+          "title": "TxOutRef",
+          "schema": {
+            "dataType": "constructor",
+            "title": "TxOutRef",
+            "fields": [
+              {
+                "dataType": "bytes",
+                "title": "id"
+              },
+              {
+                "dataType": "integer",
+                "title": "idx"
+              }
+            ]
+          }
+        }
+      ],
+      "compiledCode": "5901970101009800abd8aab9daba1aba0aba3aab9eaba24888888888c8ca4c028006646526018005323299800980699807a4010005375c601a007375c601a601400948009222322323323001001229301300199499b8f375c602e00201133003003301200299baf3013001004180a800d280dd58031ba633011337600046ea00052f5bded8c06ea4005364801a930cc8c0040048a400644601a6eaa4cdd7980818069baa00200b99ba548000cc010010006004b0dd6180600098041baa300b004c999119911991800800914800c8a4c016400a44660280046602800297ae05284cc0100100054a200237560040026644664526020005300f300c0028008dd519911991800800914800c8a400a4526600e0100054c103d87a800099ba548000cc0500052f5c133006006003298103d87a80001bab0043752002464465266e4000c007266e3c00c007004c0098000dd70009bae0014c0101a000300b3300d48020c020dd518058021bae300b0012337106eb4c030c0200052000b5260c01c008dd5180498028015ad6b586ea8c020cc02920040013004375400201",
+      "hash": "1c541d7d28457ba8d485b1117c3894c0736969d958c45ceec8fcf13e"
+    },
+    {
+      "title": "Vesting",
+      "description": "The beneficiary claims after the deadline; the owner cancels before it.",
+      "redeemer": {
+        "title": "VestingAction",
+        "schema": {
+          "title": "VestingAction",
+          "anyOf": [
+            {
+              "dataType": "constructor",
+              "title": "Claim",
+              "index": 0,
+              "fields": [
+                
+              ]
+            },
+            {
+              "dataType": "constructor",
+              "title": "Cancel",
+              "index": 1,
+              "fields": [
+                
+              ]
+            }
+          ]
+        }
+      },
+      "datum": {
+        "title": "VestingDatum",
+        "schema": {
+          "dataType": "constructor",
+          "title": "VestingDatum",
+          "fields": [
+            {
+              "dataType": "bytes",
+              "title": "owner"
+            },
+            {
+              "dataType": "bytes",
+              "title": "beneficiary"
+            },
+            {
+              "dataType": "integer",
+              "title": "deadline"
+            }
+          ]
+        }
+      },
+      "compiledCode": "5901150101009800abd8aab9daba1aab9eaba2488888c88c8c8ca4c0240066c90034c8c8ca4c030dd50014c8ca4cc028008dd718069805801da9324cdc49bad300c3006002329300e001b4dd698069806000d86ea8c030c02cdd5180618059baa300c3300e48038006d49860146ea8c02c01a64652660140046eb8c03400ed499266e24ca4c038006d375a601a601800361baa300c300b37546018601460166ea8c030cc039200e001375a6018600c0056a4c300a3754601600c300937540046012600e008652601400330093008001b0dd5180418031803800dad6b0dd51803980080118042400860086ea800488cc88cc8c0040048a400645266ebc008016660080080034a2a500011bac30053300748040008dd480081",
+      "hash": "96e98706b3d6ba6ed78efbfaa7911aed7eb192da9d3efadc11d69669"
+    }
+  ],
+  "scalus": {
+    "scalaVersion": "3.9.0"
+  }
+}

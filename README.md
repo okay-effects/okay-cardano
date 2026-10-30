@@ -27,6 +27,10 @@ Async.start(InThePage.fetching(Chain.overFetch(scripts[App](hash))))
   transactions: every script passes at exactly its declared cost.
 - **`CliFiles`** — what cardano-cli writes: a transaction's text envelope (or CBOR hex) and `query utxo
   --output-json`, so a transaction the node refused, which has no hash on chain, can still be run.
+- **`Blueprints`** — CIP-57 `plutus.json`, Scalus's or Aiken's (`$ref`s into `definitions` followed): each
+  validator's purpose, datum / redeemer / parameter schemas as data, its program with parameters applied, its hash.
+- **`ByHand`** — a script context with no transaction yet: signatories, validity range, mint, payments, other
+  inputs; for a spend the script's own input holding the datum.
 - **`Network`** — mainnet, preprod, preview: Scalus's chain parameters and the public APIs. **`Recorded`** — `Fetch`
   answered from a recording, for tests.
 

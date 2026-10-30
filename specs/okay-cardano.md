@@ -18,6 +18,10 @@ answers — a provider in a page, a recording in a test.
   `AllNeededScriptHashes`, `AllResolvedScripts`.
 - `CliFiles`: text envelope / CBOR hex; `query utxo --output-json` (address, value + assets, inlineDatumRaw |
   inlineDatum | datumhash, referenceScript envelope).
+- `Blueprints`: CIP-57 read with ujson (Scalus's model has no `$ref`): `Schema` (Integer, Bytes, Text, ListOf, Tuple,
+  MapOf, Constr, AnyOf, Opaque), purpose from the title suffix or the redeemer's `purpose`, `.else` left out,
+  `program(params)` (compiledCode = CBOR of flat), `scriptHash(params)`, `skeleton(schema)`.
+- `ByHand.context(scriptHash, purpose, redeemer, fields)`: V3 context from what a person says.
 - `Recorded.fetch(answers)`, `Recorded.blockfrost(base, cbors)`: tests' chains.
 
 ## Gates
