@@ -39,6 +39,28 @@ Async.start(InThePage.fetching(Chain.overFetch(scripts[App](hash))))
 - **`Network`** — mainnet, preprod, preview: Scalus's chain parameters and the public APIs. **`Recorded`** — `Fetch`
   answered from a recording, for tests.
 
+## For a project's tests: okay-cardano-dev
+
+The contracts a project is writing, worked on in [okay-uplc](https://okay-uplc.okay-effects.workers.dev):
+
+```scala
+libraryDependencies += "io.github.okay-effects" %% "okay-cardano-dev" % "0.1.0" % Test
+
+class Workbench extends munit.FunSuite:          // or any test framework
+  test("workspace") { Workspace.write(VestingContract, EscrowContract) }       // target/okay-uplc/workspace.json
+  test("scenarios") { assertEquals(Scenarios.verify(VestingContract, EscrowContract), Nil) }
+```
+
+- **`Workspace.write(contracts*)`** — every `Contract`'s DEBUG build (error traces, Scala positions), its schemas and
+  source map, in one file; `sbt ~test` writes it again on each change.
+- **`DevServer`** — `sbt "Test/runMain okay.cardano.dev.DevServer"` serves the workspace and `okay-uplc/scenarios` to
+  the live page (`?workspace=http://127.0.0.1:8790`): CORS for the page's origin, Private Network Access.
+- **`Scenario`** (in okay-cardano) — one call of a validator as JSON: parameters, datum, redeemer, the
+  transaction's fields, the expectation. **`Scenarios.verify`** runs every one and checks it: what was found in the
+  debugger stays true.
+- **`OkayUplc.link(name, program, context)`** — a run as a link to the page at the step where it failed, for a test's
+  failure message.
+
 ## Use it
 
 ```scala

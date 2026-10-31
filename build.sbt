@@ -29,4 +29,10 @@ lazy val cardano = crossProject(JVMPlatform, JSPlatform).crossType(CrossType.Pur
   // Scalus on Scala.js imports @noble/hashes and @noble/curves (npm install): ES modules
   .jsSettings(scalaJSLinkerConfig ~= (_.withModuleKind(ModuleKind.ESModule)))
 
-lazy val root = (project in file(".")).aggregate(cardano.jvm, cardano.js).settings(publish / skip := true)
+// FOR A PROJECT'S TESTS (the JVM): its contracts as a debugger's workspace, a dev server, scenarios verified, links
+lazy val dev = (project in file("dev")).dependsOn(cardano.jvm)
+  .settings(name := "okay-cardano-dev", libraryDependencies += "org.scalameta" %% "munit" % "1.2.3" % Test,
+    // its tests compile a validator of their own
+    addCompilerPlugin(("org.scalus" % "scalus-plugin" % scalus).cross(CrossVersion.full)))
+
+lazy val root = (project in file(".")).aggregate(cardano.jvm, cardano.js, dev).settings(publish / skip := true)
