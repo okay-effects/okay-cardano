@@ -54,7 +54,9 @@ class Workbench extends munit.FunSuite:          // or any test framework
 - **`Workspace.write(contracts*)`** — every `Contract`'s DEBUG build (error traces, Scala positions), its schemas and
   source map, in one file; `sbt ~test` writes it again on each change.
 - **`DevServer`** — `sbt "Test/runMain okay.cardano.dev.DevServer"` serves the workspace and `okay-uplc/scenarios` to
-  the live page (`?workspace=http://127.0.0.1:8790`): CORS for the page's origin, Private Network Access.
+  the page, and the page itself (relayed from where it is deployed): open
+  `http://127.0.0.1:8790/?workspace=http://127.0.0.1:8790` and the page and the project share one origin. The live site works too, once the browser may reach this machine
+  (CORS for its origin, Private Network Access).
 - **`Scenario`** (in okay-cardano) — one call of a validator as JSON: parameters, datum, redeemer, the
   transaction's fields, the expectation. **`Scenarios.verify`** runs every one and checks it: what was found in the
   debugger stays true.
