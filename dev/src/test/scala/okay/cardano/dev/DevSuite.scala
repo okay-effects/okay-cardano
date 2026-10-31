@@ -65,6 +65,31 @@ class DevSuite extends munit.FunSuite:
       assertEquals(stranger.statusCode, 403)
     finally server.stop()
 
+  test("the dev server serves the page itself: whatever is not the project is asked of the page"):
+    val page = com.sun.net.httpserver.HttpServer.create(java.net.InetSocketAddress("127.0.0.1", 0), 0)
+    page.createContext("/", x =>
+      val said = s"${x.getRequestMethod} ${x.getRequestURI}".getBytes
+      x.getResponseHeaders.set("content-type", "text/html")
+      x.sendResponseHeaders(200, said.length)
+      x.getResponseBody.write(said)
+      x.close())
+    page.start()
+    val root = Files.createTempDirectory("proj")
+    val server = DevServer(root, 0, DevServer.origins, s"http://127.0.0.1:${page.getAddress.getPort}/").start()
+    val http = HttpClient.newHttpClient()
+    try
+      val index = http.send(HttpRequest.newBuilder(URI.create(server.address + "/?workspace=x")).build(),
+        HttpResponse.BodyHandlers.ofString())
+      assertEquals((index.statusCode, index.body), (200, "GET /?workspace=x"))
+      assertEquals(index.headers.firstValue("content-type").get, "text/html")
+      val koios = http.send(HttpRequest.newBuilder(URI.create(server.address + "/koios/preview/tx_cbor"))
+        .POST(HttpRequest.BodyPublishers.ofString("{}")).build(), HttpResponse.BodyHandlers.ofString())
+      assertEquals(koios.body, "POST /koios/preview/tx_cbor")
+      val none = http.send(HttpRequest.newBuilder(URI.create(server.address + "/workspace")).build(),
+        HttpResponse.BodyHandlers.ofString())
+      assertEquals(none.statusCode, 404)
+    finally { server.stop(); page.stop(0) }
+
   test("a run as a link: its fragment inflates to the case and the step"):
     val program = Workspace.debug(GateContract)
     val s = scenario("08" * 28, passes = false)

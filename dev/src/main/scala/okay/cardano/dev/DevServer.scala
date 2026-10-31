@@ -8,12 +8,16 @@ import okay.cardano.Scenario
 /**
  * THE PROJECT FOR THE DEBUGGER'S PAGE, on this machine: `GET /workspace` (the workspace file, with an ETag so the page
  * sees when it changed), `GET /scenarios` (every scenario), `PUT` / `DELETE /scenarios/<name>.json`. Only the page's
- * origins are answered (CORS), and Chrome's Private Network Access is allowed, so the live page can reach localhost.
+ * origins are answered (CORS), and Chrome's Private Network Access is allowed, so the live page can reach localhost
+ * once the person allows it. EVERYTHING ELSE is the page itself, fetched from `page`: opened from this server, the page
+ * and its project share one origin and the browser asks nothing.
  * `sbt "Test/runMain okay.cardano.dev.DevServer"`, then open the address it prints.
  */
-final class DevServer(root: Path, port: Int, origins: String => Boolean):
+final class DevServer(root: Path, port: Int, origins: String => Boolean, page: String = OkayUplc.page):
   private val workspace = root.resolve(Workspace.file)
   private val scenarios = root.resolve(Scenarios.dir)
+  private val upstream = java.net.http.HttpClient.newBuilder()
+    .followRedirects(java.net.http.HttpClient.Redirect.NORMAL).build()
   private val server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0)
 
   def address: String = s"http://127.0.0.1:${server.getAddress.getPort}"
@@ -75,7 +79,26 @@ final class DevServer(root: Path, port: Int, origins: String => Boolean):
       case ("DELETE", p) if name(p).isDefined =>
         Files.deleteIfExists(scenarios.resolve(name(p).get))
         send(x, 204, "", Array.empty)
+      case ("GET" | "HEAD" | "POST", p) if !p.startsWith("/workspace") && !p.startsWith("/scenarios") => relay(x)
       case _ => send(x, 404, "text/plain", s"nothing at $path".getBytes)
+
+  /** the page's own files and its edge (`/koios/...`), asked of the page where it is deployed */
+  private def relay(x: HttpExchange): Unit =
+    import java.net.http.{HttpRequest, HttpResponse}
+    val uri = x.getRequestURI
+    val target = java.net.URI.create(page.stripSuffix("/") + uri.getRawPath +
+      Option(uri.getRawQuery).fold("")("?" + _))
+    val body = x.getRequestBody.readAllBytes()
+    val b = HttpRequest.newBuilder(target).method(x.getRequestMethod,
+      if body.isEmpty then HttpRequest.BodyPublishers.noBody() else HttpRequest.BodyPublishers.ofByteArray(body))
+    Option(x.getRequestHeaders.getFirst("content-type")).foreach(b.header("content-type", _))
+    val r = upstream.send(b.build(), HttpResponse.BodyHandlers.ofByteArray())
+    val kind = r.headers.firstValue("content-type").orElse("application/octet-stream")
+    if x.getRequestMethod == "HEAD" then
+      x.getResponseHeaders.set("content-type", kind)
+      x.sendResponseHeaders(r.statusCode, -1)
+      x.close()
+    else send(x, r.statusCode, kind, r.body)
 
 object DevServer:
   /** the debugger's page, and a page served from this machine (a local copy, its tests) */
@@ -86,5 +109,6 @@ object DevServer:
     val port = args.sliding(2).collectFirst { case Array("--port", p) => p.toInt }.getOrElse(8790)
     val server = DevServer(Path.of("").toAbsolutePath, port, origins).start()
     println(s"okay-uplc workspace on ${server.address}")
-    println(s"open ${OkayUplc.page}?workspace=${server.address}")
+    println(s"open ${server.address}/?workspace=${server.address}")
+    println(s"  (or ${OkayUplc.page}?workspace=${server.address}, once the browser may reach this machine)")
     Thread.currentThread().join()
