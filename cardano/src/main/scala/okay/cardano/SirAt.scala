@@ -33,16 +33,28 @@ object SirAt:
     case a: AnnotatedSIR => a.anns.pos :: a.anns.pos.inlinedFrom
     case _               => Nil
 
-  /** `line` counted from 1, as SourceMap counts; Scalus counts from 0 */
-  private def covers(s: SIR, file: String, line: Int): Boolean =
-    positions(s).exists(p => p.file == file && p.startLine + 1 <= line && line <= p.endLine + 1)
+  /** how many lines the node spans where it covers the line (`line` counted from 1, as SourceMap counts; Scalus
+    * counts from 0), if it covers it
+    */
+  private def span(s: SIR, file: String, line: Int): Option[Int] =
+    positions(s).filter(p => p.file == file && p.startLine + 1 <= line && line <= p.endLine + 1)
+      .map(p => p.endLine - p.startLine).minOption
 
-  /** the path from the root to the deepest node covering the line (the root first), if any covers it */
+  /** the path from the root to the node that best covers the line (the root first): the narrowest span, and of those
+    * the outermost — the whole expression on the line rather than a variable in it
+    */
   def path(root: SIR, file: String, line: Int): List[SIR] =
-    def go(s: SIR): Option[List[SIR]] =
-      val below = children(s).iterator.map(go).collectFirst { case Some(p) => p }
-      below.map(s :: _).orElse(Option.when(covers(s, file, line))(List(s)))
-    go(root).getOrElse(Nil)
+    var best: Option[(Int, Int, List[SIR])] = None // span, depth, path reversed
+    def go(s: SIR, up: List[SIR]): Unit =
+      val here = s :: up
+      // a `let` is structure: its position is its body's line, its value is what to mark
+      span(s, file, line).filter(_ => !s.isInstanceOf[SIR.Let]).foreach { w =>
+        val depth = here.size
+        if best.forall((bw, bd, _) => w < bw || (w == bw && depth < bd)) then best = Some((w, depth, here))
+      }
+      children(s).foreach(go(_, here))
+    go(root, Nil)
+    best.map(_._3.reverse).getOrElse(Nil)
 
   private def print(s: SIR): List[String] = PrettyPrinter.pretty(s, Style.Normal).render(100).linesIterator.toList
 
