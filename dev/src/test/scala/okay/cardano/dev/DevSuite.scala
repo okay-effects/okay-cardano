@@ -31,7 +31,9 @@ class DevSuite extends munit.FunSuite:
     Files.writeString(dir.resolve("stranger.json"), Scenario.write(scenario("08" * 28, passes = false)))
     assertEquals(Scenarios.verifyIn(dir, List(GateContract)), Nil)
     Files.writeString(dir.resolve("wrong.json"), Scenario.write(scenario("08" * 28, passes = true)))
-    assertEquals(Scenarios.verifyIn(dir, List(GateContract)).map(_._1), List("wrong.json"))
+    val wrong = Scenarios.verifyIn(dir, List(GateContract))
+    assertEquals(wrong.map(_._1), List("wrong.json"))
+    assert(wrong.head._2.last.startsWith("step through it: https://okay-uplc.okay-effects.workers.dev/#case="))
 
   test("the dev server: the workspace with its ETag, scenarios read and written, only the page's origins"):
     val root = Files.createTempDirectory("proj")
