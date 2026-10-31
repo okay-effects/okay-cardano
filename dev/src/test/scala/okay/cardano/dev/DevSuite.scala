@@ -24,6 +24,9 @@ class DevSuite extends munit.FunSuite:
     assertNotEquals(read.validators.head.compiledCode, release)
     val sources = ujson.read(text)("validators")(0)("okay-uplc")("sources")
     assert(sources("lines").obj.keys.exists(_.endsWith("Gate.scala")), sources.render().take(300))
+    val sir = okay.cardano.Builds.decode(ujson.read(text)("validators")(0)("okay-uplc")("sir").str)
+    assertEquals(okay.cardano.Builds.compile(sir, Workspace.compiled(GateContract).options).flatEncoded.toList,
+      Workspace.compiled(GateContract).program.deBruijnedProgram.flatEncoded.toList)
 
   test("scenarios verified: as they expect, or the reasons"):
     val dir = Files.createTempDirectory("sc")
@@ -97,6 +100,16 @@ class DevSuite extends munit.FunSuite:
     assertEquals(Contracts.named(List("okay.cardano.dev.GateContract")), List(GateContract))
     val dir = Path.of(classOf[GateContract.type].getProtectionDomain.getCodeSource.getLocation.toURI)
     assertEquals(Contracts.of(List("--classes", dir.toString)), List(GateContract))
+
+  test("a contract compiled again from its SIR: the same program as Scalus's, other builds other programs"):
+    val compiled = Workspace.compiled(GateContract)
+    val sir = okay.cardano.Builds.decode(okay.cardano.Builds.encode(compiled.sir))
+    assertEquals(okay.cardano.Builds.compile(sir, compiled.options).flatEncoded.toList,
+      compiled.program.deBruijnedProgram.flatEncoded.toList)
+    val debug = okay.cardano.Builds.compile(sir, compiled.withErrorTraces.options)
+    assertEquals(debug.flatEncoded.toList, Workspace.debug(GateContract).flatEncoded.toList)
+    val sizes = okay.cardano.Builds.presets.map(b => okay.cardano.Builds.compile(sir, b.options).flatEncoded.length)
+    assert(sizes.distinct.size > 2, sizes)
 
   test("a run as a link: its fragment inflates to the case and the step"):
     val program = Workspace.debug(GateContract)

@@ -9,7 +9,7 @@ import scalus.utils.Hex
 /**
  * A PROJECT'S CONTRACTS AS A DEBUGGER'S WORKSPACE: one file, `target/okay-uplc/workspace.json` — a CIP-57 blueprint of
  * every contract whose `compiledCode` is the DEBUG build (error traces on, Scala positions kept) and, beside each
- * validator, its Scala source map. Written by a test or a main (`Workspace.write(VestingContract, EscrowContract)`);
+ * validator, its Scala source map and its SIR. Written by a test or a main (`Workspace.write(VestingContract, EscrowContract)`);
  * under `sbt ~test` it is written again on every change, and a page connected to the dev server sees it.
  */
 object Workspace:
@@ -28,12 +28,15 @@ object Workspace:
   def json(contracts: Seq[Contract], project: String): String =
     val validators = contracts.flatMap { c =>
       val program = debug(c)
+      // the contract's SIR, for the page to compile it again with other options (okay.cardano.Builds)
+      val sir = scala.util.Try(okay.cardano.Builds.encode(compiled(c).sir)).fold(_ => ujson.Null, ujson.Str(_))
       val sources = SourceMap.of(program.term, ProjectFiles.read)
       ujson.read(c.blueprint.toJson()).obj.get("validators").toList.flatMap(_.arr).map { v =>
         val release = v.obj.get("compiledCode").map(_.str).getOrElse("")
         v("compiledCode") = Hex.bytesToHex(program.cborEncoded)
         v("okay-uplc") = ujson.Obj(
           "sources" -> ujson.read(SourceMap.encode(sources)),
+          "sir" -> sir,
           "releaseSize" -> ujson.Num(release.length / 2.0),
           "releaseHash" -> v.obj.get("hash").getOrElse(ujson.Null)
         )
