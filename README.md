@@ -43,6 +43,20 @@ Async.start(InThePage.fetching(Chain.overFetch(scripts[App](hash))))
 
 The contracts a project is writing, worked on in [okay-uplc](https://okay-uplc.okay-effects.workers.dev):
 
+With no code at all, by the sbt plugin (sbt 1.x) in `project/plugins.sbt`:
+
+```scala
+resolvers += "okay-cardano" at "https://okay-effects.github.io/okay-cardano/maven"
+addSbtPlugin("io.github.okay-effects" % "sbt-okay-uplc" % "0.1.0")
+```
+
+- `sbt okayUplcServe` — writes the workspace (every Scalus `Contract` object in the project, or `okayUplcContracts`)
+  and serves it with the page: open `http://127.0.0.1:8790/?workspace=http://127.0.0.1:8790`. `okayUplcStart` does
+  the same in the background of an sbt shell; there `~okayUplcWorkspace` keeps the page fresh as the code changes.
+- `sbt okayUplcVerify` — every scenario in `okay-uplc/scenarios` checked; a wrong one fails with its link.
+
+The plugin puts okay-cardano-dev on the test class path; the same by hand, from a test:
+
 ```scala
 libraryDependencies += "io.github.okay-effects" %% "okay-cardano-dev" % "0.1.0" % Test
 

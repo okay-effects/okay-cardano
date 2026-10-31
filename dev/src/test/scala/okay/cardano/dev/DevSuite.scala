@@ -92,6 +92,12 @@ class DevSuite extends munit.FunSuite:
       assertEquals(none.statusCode, 404)
     finally { server.stop(); page.stop(0) }
 
+  test("the project's contracts found on the class path, or named"):
+    assertEquals(Contracts.found().map(_.getClass.getName), List("okay.cardano.dev.GateContract$"))
+    assertEquals(Contracts.named(List("okay.cardano.dev.GateContract")), List(GateContract))
+    val dir = Path.of(classOf[GateContract.type].getProtectionDomain.getCodeSource.getLocation.toURI)
+    assertEquals(Contracts.of(List("--classes", dir.toString)), List(GateContract))
+
   test("a run as a link: its fragment inflates to the case and the step"):
     val program = Workspace.debug(GateContract)
     val s = scenario("08" * 28, passes = false)

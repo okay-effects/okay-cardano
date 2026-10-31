@@ -57,3 +57,10 @@ object Workspace:
     Files.writeString(tmp, json(contracts, project))
     Files.move(tmp, to, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
     to
+
+  /** `Workspace [contract objects…]`: the workspace of the contracts named, or of every one found */
+  def main(args: Array[String]): Unit =
+    val contracts = Contracts.of(args.toSeq)
+    if contracts.isEmpty then sys.error("no Scalus Contract object found: compile the project, or name them")
+    println(s"okay-uplc workspace: ${write(contracts*)} (${contracts.map(_.blueprint.preamble.title).mkString(", ")})")
+

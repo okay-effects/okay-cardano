@@ -17,7 +17,8 @@ only when someone else depends on it.
 1. Everything green with no local copies of the libraries:
    `sbt -Dsbt.ivy.home=$(mktemp -d) clean test`.
 2. `ThisBuild / version` without `-SNAPSHOT`; committed, tagged (`git tag -f v0.1.0`).
-3. `rm -rf target/pages-maven && sbt publish`.
+3. `rm -rf target/pages-maven && sbt publish && (cd sbt-okay-uplc && sbt publish)` — the sbt plugin is a build of
+   its own (sbt 1, Scala 2.12) writing into the same `target/pages-maven`.
 4. Onto `gh-pages`, under `maven/`:
 
    ```sh

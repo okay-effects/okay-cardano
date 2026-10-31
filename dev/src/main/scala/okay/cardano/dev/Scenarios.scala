@@ -41,3 +41,12 @@ object Scenarios:
     val hash = scalus.cardano.ledger.Script.PlutusV3(scalus.uplc.builtin.ByteString.fromArray(withParams.cborEncoded))
       .scriptHash
     OkayUplc.link(s.name, withParams, s.context(hash))
+
+  /** `Scenarios [contract objects…]`: every scenario checked; the problems (each with its link) and a failure if any */
+  def main(args: Array[String]): Unit =
+    val problems = verify(Contracts.of(args.toSeq)*)
+    problems.foreach((f, ps) => println(s"✗ $f\n${ps.map("  " + _).mkString("\n")}"))
+    println(s"okay-uplc scenarios: ${files().size}, ${if problems.isEmpty then "all as expected" else
+      s"${problems.size} not as expected"}")
+    if problems.nonEmpty then throw RuntimeException(s"${problems.size} scenarios not as expected")
+
