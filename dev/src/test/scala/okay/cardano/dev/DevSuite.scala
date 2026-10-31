@@ -24,6 +24,12 @@ class DevSuite extends munit.FunSuite:
     assertNotEquals(read.validators.head.compiledCode, release)
     val sources = ujson.read(text)("validators")(0)("okay-uplc")("sources")
     assert(sources("lines").obj.keys.exists(_.endsWith("Gate.scala")), sources.render().take(300))
+    val names = okay.cardano.Names.decode(ujson.read(text)("validators")(0)("okay-uplc")("names").render())
+    val bare = scalus.uplc.DeBruijnedProgram.fromCborHex(read.validators.head.compiledCode)
+    assert(okay.cardano.Names.of(bare.term).forall(_.startsWith("i")), okay.cardano.Names.of(bare.term).take(5))
+    val named = okay.cardano.Names.of(okay.cardano.Names.restore(bare.term, names))
+    assertEquals(named, okay.cardano.Names.of(Workspace.debug(GateContract).term))
+    assert(named.exists(_.startsWith("sc$proxy1-")), named)
     val sir = okay.cardano.Builds.decode(ujson.read(text)("validators")(0)("okay-uplc")("sir").str)
     assertEquals(okay.cardano.Builds.compile(sir, Workspace.compiled(GateContract).options).flatEncoded.toList,
       Workspace.compiled(GateContract).program.deBruijnedProgram.flatEncoded.toList)

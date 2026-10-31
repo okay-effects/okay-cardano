@@ -37,6 +37,7 @@ object Workspace:
         v("okay-uplc") = ujson.Obj(
           "sources" -> ujson.read(SourceMap.encode(sources)),
           "sir" -> sir,
+          "names" -> ujson.read(okay.cardano.Names.encode(okay.cardano.Names.of(program.term))),
           "releaseSize" -> ujson.Num(release.length / 2.0),
           "releaseHash" -> v.obj.get("hash").getOrElse(ujson.Null)
         )
