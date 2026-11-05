@@ -89,7 +89,7 @@ object Attacks:
 
   /** each output to someone other than this script and the attacker, sent to the attacker instead */
   def redirect(ctx: ScriptContext, own: ByteString): List[Attack] =
-    outputs(ctx).collect { case (o, i) if !at(o, own) && o.address != attackerAddress =>
+    outputs(ctx).collect { case (o, i) if !at(o, own) && o.address.toData != attackerAddress.toData =>
       Attack(s"redirect #$i", s"output #$i (${who(o.address)}) can go to the attacker instead: a vulnerability if " +
         "the contract owes it, fine if it is the transaction's change", Severity.Review,
         List(withOutputs(ctx, replace(ctx, i, o.copy(address = attackerAddress)))))
@@ -132,7 +132,8 @@ object Attacks:
   def forgedState(ctx: ScriptContext, own: ByteString): Option[Attack] = spent(ctx).flatMap { (ref, in, _) =>
     Option.when(!in.resolved.value.tokens(own).isEmpty) {
       val tx = ctx.txInfo.copy(
-        inputs = ctx.txInfo.inputs.map(i => if i.outRef == ref then i.copy(resolved = without(i.resolved, own))
+        inputs = ctx.txInfo.inputs.map(i =>
+          if i.outRef.toData == ref.toData then i.copy(resolved = without(i.resolved, own))
           else i),
         outputs = ctx.txInfo.outputs.map(without(_, own)))
       Attack("forged-state", "a UTxO at this script WITHOUT its own token passes as the real one: anyone can put one " +
@@ -163,7 +164,7 @@ object Attacks:
   /** the script's own hash: the spent output's script, or the minting policy */
   def ownHash(ctx: ScriptContext): Option[ByteString] = ctx.scriptInfo match
     case ScriptInfo.SpendingScript(ref, _) =>
-      ctx.txInfo.inputs.toScalaList.find(_.outRef == ref).map(_.resolved.address.credential).collect {
+      ctx.txInfo.inputs.toScalaList.find(_.outRef.toData == ref.toData).map(_.resolved.address.credential).collect {
         case Credential.ScriptCredential(h) => h
       }
     case ScriptInfo.MintingScript(policy) => Some(policy)
@@ -171,7 +172,7 @@ object Attacks:
 
   private def spent(ctx: ScriptContext): Option[(TxOutRef, TxInInfo, POption[Data])] = ctx.scriptInfo match
     case ScriptInfo.SpendingScript(ref, datum) =>
-      ctx.txInfo.inputs.toScalaList.find(_.outRef == ref).map(i => (ref, i, datum))
+      ctx.txInfo.inputs.toScalaList.find(_.outRef.toData == ref.toData).map(i => (ref, i, datum))
     case _ => None
 
   /** the names and quantities this policy mints, when the context is its minting run */
@@ -187,7 +188,7 @@ object Attacks:
   private def outputs(ctx: ScriptContext): List[(TxOut, Int)] = ctx.txInfo.outputs.toScalaList.zipWithIndex
 
   private def at(o: TxOut, own: ByteString): Boolean = o.address.credential match
-    case Credential.ScriptCredential(h) => h == own
+    case Credential.ScriptCredential(h) => h.toHex == own.toHex
     case _ => false
 
   private def replace(ctx: ScriptContext, i: Int, o: TxOut): List[TxOut] = ctx.txInfo.outputs.toScalaList.updated(i, o)
@@ -197,9 +198,9 @@ object Attacks:
 
   /** an output without the tokens of a policy */
   private def without(o: TxOut, policy: ByteString): TxOut =
-    val kept = o.value.flatten.toScalaList.filter(_._1 != policy)
+    val kept = o.value.flatten.toScalaList.filter(_._1.toHex != policy.toHex)
     o.copy(value = kept.foldLeft(Value.zero)((v, t) =>
-      if t._1 == Value.adaPolicyId then v + Value.lovelace(t._3) else v + Value(t._1, t._2, t._3)))
+      if t._1.toHex.isEmpty then v + Value.lovelace(t._3) else v + Value(t._1, t._2, t._3)))
 
   private def who(a: Address): String = a.credential match
     case Credential.PubKeyCredential(k) => s"key ${k.hash.toHex.take(8)}…"

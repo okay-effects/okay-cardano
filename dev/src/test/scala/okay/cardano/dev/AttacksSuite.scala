@@ -95,3 +95,11 @@ class AttacksSuite extends munit.FunSuite:
   test("a sale is not moot: without the payment it fails"):
     val ds = tried(Targets.looseSale, sale(Targets.looseSale)).find(_.attack.id == "double-satisfaction").get
     assert(!ds.moot && ds.accepted)
+
+  test("a context read back from its data (as from a file or the chain): the same attacks, the same answers"):
+    import scalus.uplc.builtin.Data.fromData
+    for (c, ctx) <- Seq(Targets.looseSale -> sale(Targets.looseSale), Targets.unauthCounter -> counter(Targets
+        .unauthCounter)) do
+      val read = fromData[ScriptContext](ctx.toData)
+      assertEquals(accepted(c, read), accepted(c, ctx))
+      assert(accepted(c, read).nonEmpty)
