@@ -35,6 +35,10 @@ Async.start(InThePage.fetching(Chain.overFetch(scripts[App](hash))))
   inputs; for a spend the script's own input holding the datum.
 - **`CaseFile`** — a script run as a file (script, context, Scala source map when compiled with positions), for a
   debugger: a Scalus test writes one for a failing case (`CaseFile.of(..., ProjectFiles.read)`), okay-uplc opens it.
+- **`Attacks`** — a transaction a validator accepts, changed the way a known exploit changes it (double satisfaction,
+  redirect, stake redirect, stealing the continuing output, token dust, forged state, extra mint, sneaky burn); each
+  attack run on the script: ACCEPTED is a finding, DEFENDED shows the trace it failed with.
+  `Attacks.run(script, context)`.
   **`SourceMap`** — Scala positions per term (pre-order), the lines around them.
 - **`Network`** — mainnet, preprod, preview: Scalus's chain parameters and the public APIs. **`Recorded`** — `Fetch`
   answered from a recording, for tests.
