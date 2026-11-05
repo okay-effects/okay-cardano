@@ -142,6 +142,40 @@ object QuadraticCounter extends Validator {
     require(outs.head.value.flatten.forall(t => before.exists(_ === t)), "the value kept")
 }
 
+/** a queue anyone joins: the joiner signs, is not in it yet, and is put in front */
+case class Queue(owner: PubKeyHash, members: List[PubKeyHash]) derives FromData, ToData
+
+@Compile
+object LinearQueue extends Validator {
+  inline override def spend(datum: Option[Data], redeemer: Data, tx: TxInfo, ownRef: TxOutRef): Unit =
+    val q = datum.getOrFail("no datum").to[Queue]
+    val own = tx.findInputOrFail(ownRef, "own").resolved
+    val joiner = tx.signatories.head
+    require(!q.members.exists(_ === joiner), "already in")
+    val outs = tx.findOutputsByCredential(own.address.credential)
+    require(outs.length == BigInt(1), "one output")
+    val next = outs.head.datum match
+      case scalus.cardano.onchain.plutus.v2.OutputDatum.OutputDatum(d) => d.to[Queue]
+      case _ => fail("inline datum")
+    require(next.owner === q.owner && next.members === List.Cons(joiner, q.members), "joined in front")
+}
+
+/** the same, and every member checked unique against all the others: cost quadratic in the queue */
+@Compile
+object QuadraticQueue extends Validator {
+  inline override def spend(datum: Option[Data], redeemer: Data, tx: TxInfo, ownRef: TxOutRef): Unit =
+    val q = datum.getOrFail("no datum").to[Queue]
+    val own = tx.findInputOrFail(ownRef, "own").resolved
+    val joiner = tx.signatories.head
+    val outs = tx.findOutputsByCredential(own.address.credential)
+    require(outs.length == BigInt(1), "one output")
+    val next = outs.head.datum match
+      case scalus.cardano.onchain.plutus.v2.OutputDatum.OutputDatum(d) => d.to[Queue]
+      case _ => fail("inline datum")
+    require(next.owner === q.owner && next.members === List.Cons(joiner, q.members), "joined in front")
+    require(next.members.forall(m => next.members.filter(_ === m).length == BigInt(1)), "members unique")
+}
+
 /** mints exactly one STATE, or burns it */
 @Compile
 object StrictPolicy extends Validator {
@@ -170,6 +204,8 @@ object Targets {
   lazy val dustyCounter = PlutusV3.compile(DustyCounter.validate)
   lazy val foreignStateCounter = PlutusV3.compile(ForeignStateCounter.validate)
   lazy val quadraticCounter = PlutusV3.compile(QuadraticCounter.validate)
+  lazy val linearQueue = PlutusV3.compile(LinearQueue.validate)
+  lazy val quadraticQueue = PlutusV3.compile(QuadraticQueue.validate)
   lazy val strictPolicy = PlutusV3.compile(StrictPolicy.validate)
   lazy val loosePolicy = PlutusV3.compile(LoosePolicy.validate)
 }

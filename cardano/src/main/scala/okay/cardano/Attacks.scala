@@ -57,8 +57,8 @@ object Attacks:
   def all(ctx: ScriptContext): List[Attack] =
     ownHash(ctx).toList.flatMap { own =>
       List(doubleSatisfaction(ctx), redirect(ctx, own), redirectStake(ctx, own), stealContinuing(ctx, own),
-        tokenDust(ctx, own), dustBudget(ctx, own), forgedState(ctx, own), extraMint(ctx, own), sneakyBurn(ctx, own),
-        underpay(ctx, own),
+        tokenDust(ctx, own), dustBudget(ctx, own), listBudget(ctx, own), forgedState(ctx, own), extraMint(ctx, own),
+        sneakyBurn(ctx, own), underpay(ctx, own),
         dropSigner(ctx), unboundedTime(ctx), noDatum(ctx), datumFields(ctx), otherRedeemer(ctx)).flatten
     }
 
@@ -164,6 +164,43 @@ object Attacks:
         "still passes but costs more than a transaction may: whoever can add dust can lock this UTxO for good",
         Severity.High, List(ctx.copy(txInfo = tx)), overLimit = true)
     }
+  }
+
+  /** list entries a datum can be grown by, about (a few kilobytes of inline datum) */
+  val reachableEntries = 200
+
+  /** a list in the datum that this path GROWS (longer in the output back to the script than in the spent one — a
+   * queue, a registry anyone may join), grown by [[reachableEntries]] distinct entries in both: found when the spend
+   * still passes but costs more than a transaction may — whoever may join can lock the UTxO for good */
+  def listBudget(ctx: ScriptContext, own: ByteString): List[Attack] = spent(ctx).toList.flatMap {
+    case (ref, in, POption.Some(Data.Constr(tag, fields))) =>
+      val before = fields.toScalaList
+      outputs(ctx).filter((o, _) => at(o, own)).flatMap { (o, i) =>
+        o.datum match
+          case OutputDatum.OutputDatum(Data.Constr(t, as)) if t == tag =>
+            val after = as.toScalaList
+            before.zip(after).zipWithIndex.collect {
+              case ((Data.List(xs), Data.List(ys)), k) if ys.toScalaList.size > xs.toScalaList.size && !ys.isEmpty =>
+                val sample = ys.toScalaList.last
+                val extra = (0 until reachableEntries).map(n => variant(sample, n)).toList
+                // the entries go where the path keeps the old list: after the new ones if it prepends, before
+                // if it appends
+                val (x, y) = (xs.toScalaList, ys.toScalaList)
+                val (xAt, yAt) =
+                  if y.endsWith(x) then (0, y.size - x.size) else if y.startsWith(x) then (x.size, x.size) else (0, 0)
+                def grown(l: scala.List[Data], at: Int) = Data.List(PList.from(l.patch(at, extra, 0)))
+                val d1 = Data.Constr(tag, PList.from(before.updated(k, grown(x, xAt))))
+                val d2 = Data.Constr(t, PList.from(after.updated(k, grown(y, yAt))))
+                val withIn = withDatum(ctx, ref, in, Some(d1))
+                val out = o.copy(datum = OutputDatum.OutputDatum(d2))
+                val c = withIn.copy(txInfo = withIn.txInfo.copy(outputs = PList.from(replace(withIn, i, out))))
+                Attack(s"list-budget #$k", s"the datum's list #$k grows on this path; $reachableEntries entries " +
+                  "more and the spend still passes but costs more than a transaction may: whoever may add an entry " +
+                  "can lock this UTxO for good", Severity.High, List(c), overLimit = true)
+            }
+          case _ => Nil
+      }
+    case _ => Nil
   }
 
   /** the spent UTxO without its STATE TOKENS: the tokens of this script's own policy, and any single token (quantity
@@ -371,3 +408,18 @@ object Attacks:
       case Data.Constr(t, as) => s"Constr($t${if as.isEmpty then "" else ", …"})"
       case other => other.toString
     if s.length > 18 then s.take(16) + "…" else s
+
+  /** the n-th entry like `d`, distinct from the others: bytes with n in their last two, an integer plus a million and
+   * n, a constructor with its first such field changed */
+  private def variant(d: Data, n: Int): Data = d match
+    case Data.B(b) =>
+      val bytes = if b.bytes.length < 2 then Array.fill[Byte](2)(0) else b.bytes.clone()
+      bytes(bytes.length - 2) = (n >> 8).toByte
+      bytes(bytes.length - 1) = n.toByte
+      Data.B(ByteString.fromArray(bytes))
+    case Data.I(i) => Data.I(i + 1_000_000 + n)
+    case Data.Constr(t, as) =>
+      val l = as.toScalaList
+      val at = l.indexWhere { case Data.B(_) | Data.I(_) => true; case _ => false }
+      if at < 0 then d else Data.Constr(t, PList.from(l.updated(at, variant(l(at), n))))
+    case other => other

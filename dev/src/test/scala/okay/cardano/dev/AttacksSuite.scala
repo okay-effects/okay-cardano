@@ -176,3 +176,24 @@ class AttacksSuite extends munit.FunSuite:
     val quadratic = tried1(Targets.quadraticCounter, counter(Targets.quadraticCounter), "dust-budget")
     assert(quadratic.accepted, quadratic.runs.map(_.budget))
     println(s"dust-budget: dusty ${dusty.defence.get}; quadratic ${Attacks.share(quadratic.runs.map(_.budget))}")
+
+  private def queue(c: PlutusV3[?]): ScriptContext =
+    val bob = PubKeyHash(ByteString.fromHex("02" * 28))
+    def q(ms: List[PubKeyHash]) = Queue(alice, PList.from(ms)).toData
+    val at = Address.fromScriptHash(hash(c))
+    val before = q(List(alice))
+    val tx = TxInfo.placeholder.copy(
+      inputs = PList(TxInInfo(ref, TxOut(at, Value.lovelace(2_000_000), OutputDatum.OutputDatum(before)))),
+      outputs = PList(TxOut(at, Value.lovelace(2_000_000), OutputDatum.OutputDatum(q(List(bob, alice))))),
+      signatories = PList(bob))
+    ScriptContext(tx, Data.unit, ScriptInfo.SpendingScript(ref, POption.Some(before)))
+
+  test("list-budget: a queue that grows on this path — linear checks fit, a quadratic one locks it"):
+    val linear = tried1(Targets.linearQueue, queue(Targets.linearQueue), "list-budget #1")
+    assert(!linear.accepted && linear.defence.exists(_.startsWith("fits:")), linear.defence)
+    val quadratic = tried1(Targets.quadraticQueue, queue(Targets.quadraticQueue), "list-budget #1")
+    assert(quadratic.accepted, s"${quadratic.defence} ${quadratic.runs.map(_.budget)}")
+    println(s"list-budget: linear ${linear.defence.get}; quadratic ${Attacks.share(quadratic.runs.map(_.budget))}")
+
+  test("list-budget: none where no list grows"):
+    assert(!tried(Targets.taggedSale, sale(Targets.taggedSale)).exists(_.attack.id.startsWith("list-budget")))

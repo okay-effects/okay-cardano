@@ -30,3 +30,7 @@
   transaction's limit (16.5M mem / 10G steps) — the UTxO locked. Defended: dust refused (its trace) or "fits: x% …".
   Gate: StrictCounter refuses dust; DustyCounter fits (~2% steps); QuadraticCounter (value compared token by token)
   1339% mem → found.
+- [x] **attacks-budget-datum** — `list-budget #k` (HIGH, overLimit): a datum list that THIS path grows (longer in the
+  output back than in the spent one: a queue, a registry) grown by 200 distinct entries in both, placed where the path
+  keeps the old list (after the new entries if it prepends, before if it appends). Gate: LinearQueue fits (3% mem),
+  QuadraticQueue (members unique, each against all) 785% mem → found; no list grows on a sale → no attack.
