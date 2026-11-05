@@ -47,3 +47,15 @@ class ExploreSuite extends munit.FunSuite:
   test("a rule that rejects the case itself: said"):
     val c = Targets.taggedSale
     assert(Explore(c.withErrorTraces.program.deBruijnedProgram, sale(c), _ => false).left.exists(_.contains("rule")))
+
+  test("a sale paid by any output, against the tagged rule: the untagged payment found"):
+    val ms = explore(Targets.looseSale)
+    assert(ms.exists(m => m.kind == Explore.Kind.TooLoose && m.changes == List("output #0 untagged")),
+      ms.map(_.changes))
+
+  test("a rule looser than the validator: the refused honest transaction found (TooStrict)"):
+    val c = Targets.taggedSale
+    val noTag = (x: ScriptContext) => paid(x) || x.txInfo.outputs.toScalaList.exists(o =>
+      o.address.credential == Credential.PubKeyCredential(alice) && o.value.getLovelace >= price)
+    val ms = Explore(c.withErrorTraces.program.deBruijnedProgram, sale(c), noTag, tries = 400).fold(fail(_), identity)
+    assert(ms.exists(_.kind == Explore.Kind.TooStrict), ms.map(m => (m.kind, m.changes)))

@@ -52,15 +52,14 @@ object Explore:
         disagree(cs).map(_ => shrink(cs, disagree))
       }
       // one mismatch per kind and set of changes said without their numbers
-      Right(found.toList.distinctBy(m => (m.kind, m.changes.map(_.takeWhile(c => !c.isDigit && c != '−'))))
+      Right(found.toList.distinctBy(m => (m.kind, m.changes.map(_.replaceAll("[0-9]+", "N").replace("−", "+"))))
         .sortBy(m => (m.kind.ordinal, m.changes.size)).take(8))
 
-  /** the fewest of the changes that still disagree, dropping one at a time */
+  /** the fewest of the changes that still disagree: every subset, the smallest first (a try has three at most) */
   private def shrink(cs: List[Change], disagree: List[Change] => Option[Mismatch]): Mismatch =
-    cs.indices.foldLeft(cs)((kept, _) =>
-      kept.indices.iterator.map(i => kept.patch(i, Nil, 1)).find(c => c.nonEmpty && disagree(c).isDefined)
-        .getOrElse(kept)) match
-      case least => disagree(least).getOrElse(disagree(cs).get)
+    val indexed = cs.zipWithIndex
+    (1 to cs.size).iterator.flatMap(n => indexed.combinations(n).map(_.map(_._1)))
+      .flatMap(disagree).nextOption().getOrElse(disagree(cs).get)
 
   private def safe(rule: ScriptContext => Boolean, c: ScriptContext): Boolean = scala.util.Try(rule(c)).getOrElse(false)
 
@@ -102,7 +101,7 @@ object Explore:
       val os = c.txInfo.outputs.toScalaList
       if i < os.size then c.copy(txInfo = c.txInfo.copy(outputs = PList.from(os.updated(i, f(os(i)))))) else c
     def key(k: ByteString) = s"${k.toHex.take(8)}…"
-    r.nextInt(10) match
+    r.nextInt(11) match
       case 0 => pick(outs.indices).map { i =>
         val d = delta(r, outs(i).value.getLovelace)
         val up = r.nextBoolean()
@@ -167,6 +166,13 @@ object Explore:
         val up = r.nextBoolean()
         Change(s"mint ${if up then "+" else "−"}1", c => c.copy(txInfo = c.txInfo.copy(mint = c.txInfo.mint +
           Value(p, n, if up then 1 else -1))))
+      }
+      case 9 => pick(outs.indices).map { i =>
+        if r.nextBoolean() then Change(s"output #$i untagged", onOutput(i)(_.copy(datum = OutputDatum.NoOutputDatum)))
+        else
+          val other = TxOutRef(TxId(ByteString.fromHex("dd" * 32)), 0)
+          Change(s"output #$i tagged with another UTxO", onOutput(i)(_.copy(datum = OutputDatum.OutputDatum(
+            scalus.uplc.builtin.Data.toData(other)))))
       }
       case _ => pick(outs.indices).map(i => Change(s"output #$i doubled", c =>
         val os = c.txInfo.outputs.toScalaList

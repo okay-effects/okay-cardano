@@ -37,5 +37,5 @@
 - [x] **attacks-property** — `Explore(script, context, rule, tries, seed)`: random changes (amounts small to whole,
   payee among the transaction's keys, a token ±1, an output removed / doubled, a signer added / removed, a bound moved
   or set, a datum field moved / another key, another redeemer, the mint ±1), 1–3 a try; disagreements with the rule
-  shrunk (drop one change at a time), deduped. Gate ExploreSuite: SloppySale (1000 short passes) → TooLoose "output #0
+  shrunk to the smallest disagreeing subset, deduped by shape; outputs untagged / tagged with another UTxO too. Gate ExploreSuite: SloppySale (1000 short passes) → TooLoose "output #0
   −9 lovelace" and "datum field #1 moved", each one change; TaggedSale agrees with its rule in 400 tries.
