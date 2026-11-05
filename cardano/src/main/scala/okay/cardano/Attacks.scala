@@ -130,17 +130,19 @@ object Attacks:
         "until spending it costs too much", Severity.High, List(ctx.copy(txInfo = tx)))
     }
 
-  /** the spent UTxO without the tokens of this script's own policy (when it holds any): a UTxO anyone could have put
-   * at the address with the same datum. Its own tokens are taken from the outputs too: a forger has none. */
+  /** the spent UTxO without its STATE TOKENS: the tokens of this script's own policy, and any single token (quantity
+   * 1) that goes back to this script with the state — a state token under a policy of its own. A UTxO anyone could
+   * have put at the address with the same datum; the tokens are taken from the outputs too: a forger has none. */
   def forgedState(ctx: ScriptContext, own: ByteString): Option[Attack] = spent(ctx).flatMap { (ref, in, _) =>
-    Option.when(!in.resolved.value.tokens(own).isEmpty) {
+    val policies = stateTokens(ctx, own, in.resolved.value)
+    Option.when(policies.nonEmpty) {
+      def strip(o: TxOut) = policies.foldLeft(o)(without)
       val tx = ctx.txInfo.copy(
         inputs = ctx.txInfo.inputs.map(i =>
-          if i.outRef.toData == ref.toData then i.copy(resolved = without(i.resolved, own))
-          else i),
-        outputs = ctx.txInfo.outputs.map(without(_, own)))
-      Attack("forged-state", "a UTxO at this script WITHOUT its own token passes as the real one: anyone can put one " +
-        "there with any datum", Severity.High, List(ctx.copy(txInfo = tx)))
+          if i.outRef.toData == ref.toData then i.copy(resolved = strip(i.resolved)) else i),
+        outputs = ctx.txInfo.outputs.map(strip))
+      Attack("forged-state", "a UTxO at this script WITHOUT its state token passes as the real one: anyone can put " +
+        "one there with any datum", Severity.High, List(ctx.copy(txInfo = tx)))
     }
   }
 
@@ -265,6 +267,15 @@ object Attacks:
     case ScriptInfo.SpendingScript(ref, datum) =>
       ctx.txInfo.inputs.toScalaList.find(_.outRef.toData == ref.toData).map(i => (ref, i, datum))
     case _ => None
+
+  /** the policies of the spent value's state tokens: its own, and a single token kept in an output back to the
+   * script */
+  private def stateTokens(ctx: ScriptContext, own: ByteString, spent: Value): List[ByteString] =
+    val back = ctx.txInfo.outputs.toScalaList.filter(at(_, own))
+    spent.withoutLovelace.flatten.toScalaList.collect {
+      case (p, n, q) if p.toHex == own.toHex => p
+      case (p, n, q) if q == 1 && back.exists(_.value.quantityOf(p, n) == BigInt(1)) => p
+    }.distinctBy(_.toHex)
 
   /** the names and quantities this policy mints, when the context is its minting run */
   private def minting(ctx: ScriptContext, own: ByteString): Option[List[(ByteString, BigInt)]] = ctx.scriptInfo match

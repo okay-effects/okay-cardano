@@ -141,3 +141,28 @@ class AttacksSuite extends munit.FunSuite:
     assert(!tried1(c, ctx, "drop-signer 01010101").accepted)
     assert(tried1(c, ctx, "drop-signer 02020202").accepted)
     assert(tried1(c, ctx, "unbounded-time from").accepted && tried1(c, ctx, "unbounded-time to").accepted)
+
+  // a counter whose state token is under another policy, kept with the state
+  private def foreignCounter(c: PlutusV3[?]): ScriptContext =
+    val state = Value.lovelace(2_000_000) + Value(ByteString.fromHex("aa" * 28), ByteString.fromString("STATE"), 1)
+    val at = Address.fromScriptHash(hash(c))
+    val tx = TxInfo.placeholder.copy(inputs = PList(TxInInfo(ref, TxOut(at, state, OutputDatum.NoOutputDatum))),
+      outputs = PList(TxOut(at, state, OutputDatum.NoOutputDatum)))
+    ScriptContext(tx, Data.unit, ScriptInfo.SpendingScript(ref, POption.None))
+
+  test("a state token under a policy of its own: forged state tried — defended by a check, found without one"):
+    val strict = tried1(Targets.foreignStateCounter, foreignCounter(Targets.foreignStateCounter), "forged-state")
+    assert(!strict.accepted)
+    assertEquals(strict.defence, Some("not the state"))
+    assert(accepted(Targets.unauthCounter, foreignCounter(Targets.unauthCounter)).contains("forged-state"))
+
+  test("an item sold away (not back to the script) is no state token: no forged-state on a sale"):
+    val c = Targets.looseSale
+    val item = Value(ByteString.fromHex("bb" * 28), ByteString.fromString("ART"), 1)
+    val base = sale(c)
+    val in = base.txInfo.inputs.head
+    val ctx = base.copy(txInfo = base.txInfo.copy(
+      inputs = PList(in.copy(resolved = in.resolved.copy(value = in.resolved.value + item))),
+      outputs = PList.from(base.txInfo.outputs.toScalaList :+ TxOut(Address.fromPubKeyHash(
+        PubKeyHash(ByteString.fromHex("02" * 28))), Value.lovelace(2_000_000) + item, OutputDatum.NoOutputDatum))))
+    assert(!tried(c, ctx).exists(_.attack.id == "forged-state"), tried(c, ctx).map(_.attack.id))
