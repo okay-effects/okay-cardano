@@ -13,14 +13,17 @@ import scalus.cardano.onchain.plutus.prelude.{List as PList, Option as POption}
  */
 object ByHand:
   enum Purpose:
-    case Spend(ownRef: TxOutRef, datum: Option[Data], lovelace: BigInt)
+    /** `tokens`: what the spent output holds besides its lovelace (`None` policy: the script's own) */
+    case Spend(ownRef: TxOutRef, datum: Option[Data], lovelace: BigInt, tokens: List[Minted] = Nil)
     /** an output as it is on the chain (its address, value, datum or datum hash), spent; `datum` the one the
      * spending transaction gives (inline in the output, or the datum of its hash) */
     case SpendOutput(ownRef: TxOutRef, output: TxOut, datum: Option[Data])
     case Mint
 
-  /** a payment: to a key's address, lovelace, a datum inline if any */
-  final case class Payment(to: ByteString, lovelace: BigInt, datum: Option[Data])
+  /** a payment: to a key's address — or, `toScript`, to a script's (`to` its hash) —, lovelace and `tokens` (a `None`
+   * policy: the script's own), a datum inline if any */
+  final case class Payment(to: ByteString, lovelace: BigInt, datum: Option[Data], toScript: Boolean = false,
+    tokens: List[Minted] = Nil)
 
   /** minted (or burned, negative): under `policy`, `None` being the script's own */
   final case class Minted(policy: Option[ByteString], name: ByteString, quantity: BigInt)
@@ -36,11 +39,15 @@ object ByHand:
     val upper = f.validTo.fold(IntervalBound(IntervalBoundType.PosInf, true))(t =>
       IntervalBound(IntervalBoundType.Finite(t), false))
     val minted = f.mint.foldLeft(Value.zero)((v, m) => v + Value(m.policy.getOrElse(scriptHash), m.name, m.quantity))
-    val outputs = f.payments.map(p => TxOut(Address.fromPubKeyHash(PubKeyHash(p.to)), Value.lovelace(p.lovelace),
+    def value(lovelace: BigInt, tokens: List[Minted]) =
+      tokens.foldLeft(Value.lovelace(lovelace))((v, t) => v + Value(t.policy.getOrElse(scriptHash), t.name, t.quantity))
+    val outputs = f.payments.map(p => TxOut(
+      if p.toScript then Address.fromScriptHash(p.to) else Address.fromPubKeyHash(PubKeyHash(p.to)),
+      value(p.lovelace, p.tokens),
       p.datum.fold(OutputDatum.NoOutputDatum)(OutputDatum.OutputDatum(_))))
     val (inputs, info) = purpose match
-      case Purpose.Spend(ref, datum, lovelace) =>
-        val own = TxOut(Address.fromScriptHash(scriptHash), Value.lovelace(lovelace),
+      case Purpose.Spend(ref, datum, lovelace, tokens) =>
+        val own = TxOut(Address.fromScriptHash(scriptHash), value(lovelace, tokens),
           datum.fold(OutputDatum.NoOutputDatum)(OutputDatum.OutputDatum(_)))
         (PList(TxInInfo(ref, own)), ScriptInfo.SpendingScript(ref, datum.fold(POption.None)(POption.Some(_))))
       case Purpose.SpendOutput(ref, out, datum) =>

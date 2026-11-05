@@ -23,3 +23,5 @@
 - [x] **attacks-4a** — forged-state also for a state token under a policy of its own (a single token kept with the
   state; an item sold away is not one); AttackScenarios.uncovered: the redeemer constructors (blueprint) no passing
   scenario takes, printed by okayUplcAttack. AttacksSuite 20, AttackScenariosSuite 4.
+- [x] **scenario-outputs** — Scenario/ByHand: the spent output's `tokens`, payments `"script": true` (`"to": "self"` or a
+  hash) with `tokens`; old files read as before (new JSON fields optional, written only when used). ScenarioSuite +2.

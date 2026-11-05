@@ -47,3 +47,24 @@ class ScenarioSuite extends munit.FunSuite:
     for s <- List(claim, early.copy(expect = Scenario.Expect(false, Some("deadline"), Some(1), Some(2)))) do
       assertEquals(Scenario.read(Scenario.write(s)), Right(s))
     assert(Scenario.read("{}").isLeft)
+
+  test("a state machine's call: the spent output's tokens, a payment back to the script with tokens and a datum"):
+    import scalus.cardano.onchain.plutus.v3.{Credential, ScriptInfo}
+    val state = Scenario.Minted(Some("self"), ByteString.fromString("STATE"), 1)
+    val s = Scenario("increment", "Counter", datum = Some(BigInt(0).toData),
+      transaction = Scenario.Transaction(tokens = List(state), payments = List(
+        Scenario.Payment("self", 2_000_000, Some(Right(BigInt(1).toData)), script = true, tokens = List(state)))))
+    val back = Scenario.read(Scenario.write(s)).fold(fail(_), identity)
+    assertEquals(back, s)
+    val h = ByteString.fromHex("ab" * 28)
+    val ctx = s.context(h)
+    val own = ctx.txInfo.inputs.head.resolved
+    assertEquals(own.value.quantityOf(h, state.name), BigInt(1))
+    val out = ctx.txInfo.outputs.head
+    assertEquals(out.address.credential, Credential.ScriptCredential(h))
+    assertEquals(out.value.quantityOf(h, state.name), BigInt(1))
+    assert(ctx.scriptInfo.isInstanceOf[ScriptInfo.SpendingScript])
+
+  test("a scenario file without the new fields reads as before"):
+    val old = Scenario.write(claim).replace("\"tokens\"", "\"ignored\"")
+    assertEquals(Scenario.read(old).map(_.transaction.tokens), Right(Nil))

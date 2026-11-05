@@ -6,6 +6,7 @@ import scalus.uplc.DeBruijnedProgram
 import scalus.uplc.builtin.{ByteString, Data}
 import scalus.uplc.builtin.Data.toData
 import scalus.uplc.eval.PlutusVM
+import scala.util.chaining.*
 
 /**
  * ONE CALL OF A VALIDATOR, AS DATA: which validator, what for, its parameters, datum and redeemer, the transaction's
@@ -25,16 +26,19 @@ final case class Scenario(
   /** the script context of this call for a script of this hash */
   def context(scriptHash: ByteString): ScriptContext =
     val own = Scenario.ref(transaction.ownRef)
+    def tokens(ts: List[Scenario.Minted]) =
+      ts.map(m => ByHand.Minted(m.policy.filter(_ != "self").map(ByteString.fromHex), m.name, m.quantity))
     val p =
-      if purpose == "spend" then ByHand.Purpose.Spend(own, datum, transaction.lovelace) else ByHand.Purpose.Mint
+      if purpose == "spend" then ByHand.Purpose.Spend(own, datum, transaction.lovelace, tokens(transaction.tokens))
+      else ByHand.Purpose.Mint
     val fields = ByHand.Fields(
       transaction.signatories.map(ByteString.fromHex),
       transaction.validFrom,
       transaction.validTo,
       transaction.mint.map(m => ByHand.Minted(m.policy.filter(_ != "self").map(ByteString.fromHex), m.name,
         m.quantity)),
-      transaction.payments.map(p => ByHand.Payment(ByteString.fromHex(p.to), p.lovelace,
-        p.datum.map { case Left(_) => own.toData; case Right(d) => d })),
+      transaction.payments.map(p => ByHand.Payment(if p.to == "self" then scriptHash else ByteString.fromHex(p.to),
+        p.lovelace, p.datum.map { case Left(_) => own.toData; case Right(d) => d }, p.script, tokens(p.tokens))),
       transaction.spends.map(Scenario.ref)
     )
     ByHand.context(scriptHash, p, redeemer, fields)
@@ -42,10 +46,13 @@ final case class Scenario(
 object Scenario:
   final case class Transaction(signatories: List[String] = Nil, validFrom: Option[BigInt] = None,
     validTo: Option[BigInt] = None, ownRef: String = "00" * 32 + "#0", lovelace: BigInt = 5_000_000,
-    payments: List[Payment] = Nil, mint: List[Minted] = Nil, spends: List[String] = Nil)
+    payments: List[Payment] = Nil, mint: List[Minted] = Nil, spends: List[String] = Nil,
+    tokens: List[Minted] = Nil)
 
-  /** `datum`: `Left(())` the spent output's own reference ("own"), `Right(d)` a datum inline */
-  final case class Payment(to: String, lovelace: BigInt, datum: Option[Either[Unit, Data]] = None)
+  /** `datum`: `Left(())` the spent output's own reference ("own"), `Right(d)` a datum inline; `script`: `to` is a
+   * script's hash, or "self" this one's; `tokens` beside the lovelace. `Transaction.tokens`: the spent output's. */
+  final case class Payment(to: String, lovelace: BigInt, datum: Option[Either[Unit, Data]] = None,
+    script: Boolean = false, tokens: List[Minted] = Nil)
   /** `policy`: `None` or `Some("self")` the script's own */
   final case class Minted(policy: Option[String], name: ByteString, quantity: BigInt)
 
@@ -87,6 +94,9 @@ object Scenario:
   private def data(j: ujson.Value): Data = Data.fromJson(j.render())
   private def json(d: Data): ujson.Value = ujson.read(Data.toJson(d, 0))
 
+  private def assets(ms: List[Minted]): ujson.Value = ujson.Arr.from(ms.map(m => ujson.Obj("policy" ->
+    m.policy.getOrElse("self"), "name" -> m.name.toHex, "quantity" -> ujson.Num(m.quantity.toDouble))))
+
   def write(s: Scenario): String =
     val t = s.transaction
     ujson.Obj(
@@ -103,13 +113,17 @@ object Scenario:
         "validTo" -> t.validTo.fold[ujson.Value](ujson.Null)(v => ujson.Num(v.toDouble)),
         "ownRef" -> t.ownRef,
         "lovelace" -> ujson.Num(t.lovelace.toDouble),
-        "payments" -> ujson.Arr.from(t.payments.map(p => ujson.Obj("to" -> p.to,
-          "lovelace" -> ujson.Num(p.lovelace.toDouble),
-          "datum" -> p.datum.fold[ujson.Value](ujson.Null)(_.fold(_ => ujson.Str("own"), json))))),
+        "payments" -> ujson.Arr.from(t.payments.map { p =>
+          val o = ujson.Obj("to" -> p.to, "lovelace" -> ujson.Num(p.lovelace.toDouble),
+            "datum" -> p.datum.fold[ujson.Value](ujson.Null)(_.fold(_ => ujson.Str("own"), json)))
+          if p.script then o("script") = true
+          if p.tokens.nonEmpty then o("tokens") = assets(p.tokens)
+          o
+        }),
         "mint" -> ujson.Arr.from(t.mint.map(m => ujson.Obj("policy" -> m.policy.getOrElse("self"),
           "name" -> m.name.toHex, "quantity" -> ujson.Num(m.quantity.toDouble)))),
         "spends" -> ujson.Arr.from(t.spends.map(ujson.Str(_)))
-      ),
+      ).tap(o => if t.tokens.nonEmpty then o("tokens") = assets(t.tokens)),
       "expect" -> ujson.Obj(
         "verdict" -> (if s.expect.passes then "passes" else "fails"),
         "message" -> s.expect.message.fold[ujson.Value](ujson.Null)(ujson.Str(_)),
@@ -121,6 +135,8 @@ object Scenario:
   def read(text: String): Either[String, Scenario] = scala.util.Try {
     val j = ujson.read(text)
     def opt(v: ujson.Value, k: String) = v.obj.get(k).filterNot(_.isNull)
+    def minted(v: ujson.Value) = v.arr.toList.map(m => Minted(opt(m, "policy").map(_.str),
+      ByteString.fromHex(m("name").str), big(m("quantity"))))
     def big(v: ujson.Value) = v match
       case ujson.Str(s) => BigInt(s)
       case other => BigInt(other.num.toLong)
@@ -140,10 +156,11 @@ object Scenario:
         opt(t, "ownRef").map(_.str).getOrElse("00" * 32 + "#0"),
         opt(t, "lovelace").map(big).getOrElse(BigInt(5_000_000)),
         opt(t, "payments").map(_.arr.toList.map(p => Payment(p("to").str, big(p("lovelace")),
-          opt(p, "datum").map(d => if d.strOpt.contains("own") then Left(()) else Right(data(d)))))).getOrElse(Nil),
-        opt(t, "mint").map(_.arr.toList.map(m => Minted(opt(m, "policy").map(_.str), ByteString.fromHex(m("name").str),
-          big(m("quantity"))))).getOrElse(Nil),
-        opt(t, "spends").map(_.arr.toList.map(_.str)).getOrElse(Nil)
+          opt(p, "datum").map(d => if d.strOpt.contains("own") then Left(()) else Right(data(d))),
+          opt(p, "script").exists(_.bool), opt(p, "tokens").map(minted).getOrElse(Nil)))).getOrElse(Nil),
+        opt(t, "mint").map(minted).getOrElse(Nil),
+        opt(t, "spends").map(_.arr.toList.map(_.str)).getOrElse(Nil),
+        opt(t, "tokens").map(minted).getOrElse(Nil)
       ),
       Expect(
         opt(e, "verdict").forall(_.str == "passes"),
