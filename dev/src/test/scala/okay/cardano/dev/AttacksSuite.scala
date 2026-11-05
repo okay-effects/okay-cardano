@@ -58,7 +58,8 @@ class AttacksSuite extends munit.FunSuite:
   test("the strict counter: no HIGH attack accepted"):
     val ts = tried(Targets.strictCounter, counter(Targets.strictCounter))
     assertEquals(ts.filter(_.attack.severity == Attacks.Severity.High).map(_.attack.id).toSet,
-      Set("double-satisfaction", "redirect-stake #0", "steal-continuing", "token-dust #0", "forged-state"))
+      Set("double-satisfaction", "redirect-stake #0", "steal-continuing", "token-dust #0", "dust-budget",
+        "forged-state"))
     assertEquals(ts.filter(t => t.accepted && t.attack.severity == Attacks.Severity.High).map(_.attack.id), Nil)
 
   test("no token check: forged state found"):
@@ -166,3 +167,12 @@ class AttacksSuite extends munit.FunSuite:
       outputs = PList.from(base.txInfo.outputs.toScalaList :+ TxOut(Address.fromPubKeyHash(
         PubKeyHash(ByteString.fromHex("02" * 28))), Value.lovelace(2_000_000) + item, OutputDatum.NoOutputDatum))))
     assert(!tried(c, ctx).exists(_.attack.id == "forged-state"), tried(c, ctx).map(_.attack.id))
+
+  test("dust-budget: refused dust defends; linear cost fits; quadratic cost locks the state"):
+    val strict = tried1(Targets.strictCounter, counter(Targets.strictCounter), "dust-budget")
+    assertEquals(strict.defence, Some("only the state"))
+    val dusty = tried1(Targets.dustyCounter, counter(Targets.dustyCounter), "dust-budget")
+    assert(!dusty.accepted && dusty.defence.exists(_.startsWith("fits:")), dusty.defence)
+    val quadratic = tried1(Targets.quadraticCounter, counter(Targets.quadraticCounter), "dust-budget")
+    assert(quadratic.accepted, quadratic.runs.map(_.budget))
+    println(s"dust-budget: dusty ${dusty.defence.get}; quadratic ${Attacks.share(quadratic.runs.map(_.budget))}")

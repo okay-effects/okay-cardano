@@ -29,7 +29,7 @@ object Attacks:
   /** an exploit tried: what it changes, what accepting it means, and the runs of the script it needs; `moot`: runs
    * that, when they all pass, make the attack beside the point (double satisfaction of a script that pays no one) */
   final case class Attack(id: String, claim: String, severity: Severity, runs: List[ScriptContext],
-    moot: List[ScriptContext] = Nil)
+    moot: List[ScriptContext] = Nil, overLimit: Boolean = false)
 
   /** one run's outcome */
   final case class Run(passes: Boolean, budget: ExUnits, logs: List[String])
@@ -38,9 +38,12 @@ object Attacks:
   final case class Tried(attack: Attack, runs: List[Run], mootRuns: List[Run] = Nil):
     /** the attack does not apply: its moot runs all pass */
     def moot: Boolean = mootRuns.nonEmpty && mootRuns.forall(_.passes)
-    def accepted: Boolean = !moot && runs.forall(_.passes)
+    /** an attack that must cost too much (`overLimit`) succeeds when its runs pass AND one goes over a transaction's
+     * limit: logic says yes, the chain cannot run it — the UTxO is locked */
+    def accepted: Boolean = !moot && runs.forall(_.passes) && (!attack.overLimit || runs.exists(r => over(r.budget)))
     /** the trace the defence failed with: the last one of the first failing run */
     def defence: Option[String] = runs.find(!_.passes).map(_.logs.lastOption.getOrElse("(no trace)"))
+      .orElse(Option.when(attack.overLimit && !accepted && !moot)(s"fits: ${share(runs.map(_.budget))}"))
 
   /** the attacker: a key no party of a real transaction has */
   val attacker: PubKeyHash = PubKeyHash(ByteString.fromHex("ee" * 28))
@@ -54,7 +57,8 @@ object Attacks:
   def all(ctx: ScriptContext): List[Attack] =
     ownHash(ctx).toList.flatMap { own =>
       List(doubleSatisfaction(ctx), redirect(ctx, own), redirectStake(ctx, own), stealContinuing(ctx, own),
-        tokenDust(ctx, own), forgedState(ctx, own), extraMint(ctx, own), sneakyBurn(ctx, own), underpay(ctx, own),
+        tokenDust(ctx, own), dustBudget(ctx, own), forgedState(ctx, own), extraMint(ctx, own), sneakyBurn(ctx, own),
+        underpay(ctx, own),
         dropSigner(ctx), unboundedTime(ctx), noDatum(ctx), datumFields(ctx), otherRedeemer(ctx)).flatten
     }
 
@@ -129,6 +133,38 @@ object Attacks:
       Attack(s"token-dust #$i", s"output #$i back to this script can carry junk tokens: the state can be bloated " +
         "until spending it costs too much", Severity.High, List(ctx.copy(txInfo = tx)))
     }
+
+  /** a transaction's execution limit (protocol parameters, Conway) */
+  val txMemory: Long = 16_500_000L
+  val txSteps: Long = 10_000_000_000L
+  /** junk tokens of one policy an output can hold within the 5000-byte value limit, about */
+  val reachableDust = 400
+
+  def over(b: ExUnits): Boolean = b.memory > txMemory || b.steps > txSteps
+
+  /** the largest run's share of a transaction's limit */
+  def share(bs: List[ExUnits]): String =
+    val mem = bs.map(_.memory).maxOption.getOrElse(0L)
+    val steps = bs.map(_.steps).maxOption.getOrElse(0L)
+    f"${100.0 * mem / txMemory}%.0f%% of a transaction's memory, ${100.0 * steps / txSteps}%.0f%% of its steps"
+
+  /** the state bloated to the limit: [[reachableDust]] junk tokens in the spent UTxO and in each output back to the
+   * script. Where dust is accepted, anyone can add it; if spending then costs more than a transaction may, the logic
+   * still says yes but no transaction can carry it — the UTxO is locked for good. */
+  def dustBudget(ctx: ScriptContext, own: ByteString): Option[Attack] = spent(ctx).flatMap { (ref, _, _) =>
+    Option.when(outputs(ctx).exists((o, _) => at(o, own))) {
+      val junk = (0 until reachableDust).foldLeft(Value.zero)((v, i) =>
+        v + Value(junkPolicy, ByteString.fromString(f"j$i%03d"), 1))
+      def bloat(o: TxOut) = o.copy(value = o.value + junk)
+      val tx = ctx.txInfo.copy(
+        inputs = ctx.txInfo.inputs.map(i => if i.outRef.toData == ref.toData then i.copy(resolved = bloat(i.resolved))
+          else i),
+        outputs = ctx.txInfo.outputs.map(o => if at(o, own) then bloat(o) else o))
+      Attack("dust-budget", s"with $reachableDust junk tokens in the state (what one output can hold) the spend " +
+        "still passes but costs more than a transaction may: whoever can add dust can lock this UTxO for good",
+        Severity.High, List(ctx.copy(txInfo = tx)), overLimit = true)
+    }
+  }
 
   /** the spent UTxO without its STATE TOKENS: the tokens of this script's own policy, and any single token (quantity
    * 1) that goes back to this script with the state — a state token under a policy of its own. A UTxO anyone could

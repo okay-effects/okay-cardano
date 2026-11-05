@@ -25,3 +25,8 @@
   scenario takes, printed by okayUplcAttack. AttacksSuite 20, AttackScenariosSuite 4.
 - [x] **scenario-outputs** — Scenario/ByHand: the spent output's `tokens`, payments `"script": true` (`"to": "self"` or a
   hash) with `tokens`; old files read as before (new JSON fields optional, written only when used). ScenarioSuite +2.
+- [x] **attacks-budget** — `dust-budget` (HIGH, `overLimit`): 400 junk tokens of one policy (what one output holds
+  within 5000 bytes) in the state and each output back; succeeds when the logic passes but a run costs over a
+  transaction's limit (16.5M mem / 10G steps) — the UTxO locked. Defended: dust refused (its trace) or "fits: x% …".
+  Gate: StrictCounter refuses dust; DustyCounter fits (~2% steps); QuadraticCounter (value compared token by token)
+  1339% mem → found.

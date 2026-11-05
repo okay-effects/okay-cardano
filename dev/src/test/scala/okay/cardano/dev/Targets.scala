@@ -125,6 +125,23 @@ object ForeignStateCounter extends Validator {
     require(outs.head.value.quantityOf(policy, Counter.name) == BigInt(1), "the state kept")
 }
 
+/** dust accepted, and the value compared token by token against the spent one: cost quadratic in the dust */
+@Compile
+object QuadraticCounter extends Validator {
+  inline override def spend(datum: Option[Data], redeemer: Data, tx: TxInfo, ownRef: TxOutRef): Unit =
+    val own = tx.findInputOrFail(ownRef, "own").resolved
+    val h = own.address.credential match
+      case Credential.ScriptCredential(h) => h
+      case _ => fail("not a script")
+    require(own.value.quantityOf(h, Counter.name) == BigInt(1), "not the state")
+    require(tx.findInputsByCredential(own.address.credential).length == BigInt(1), "one input")
+    val outs = tx.findOutputsByCredential(own.address.credential)
+    require(outs.length == BigInt(1), "one output")
+    require(outs.head.address === own.address, "same address")
+    val before = own.value.flatten
+    require(outs.head.value.flatten.forall(t => before.exists(_ === t)), "the value kept")
+}
+
 /** mints exactly one STATE, or burns it */
 @Compile
 object StrictPolicy extends Validator {
@@ -152,6 +169,7 @@ object Targets {
   lazy val stakeBlindCounter = PlutusV3.compile(StakeBlindCounter.validate)
   lazy val dustyCounter = PlutusV3.compile(DustyCounter.validate)
   lazy val foreignStateCounter = PlutusV3.compile(ForeignStateCounter.validate)
+  lazy val quadraticCounter = PlutusV3.compile(QuadraticCounter.validate)
   lazy val strictPolicy = PlutusV3.compile(StrictPolicy.validate)
   lazy val loosePolicy = PlutusV3.compile(LoosePolicy.validate)
 }

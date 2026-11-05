@@ -17,7 +17,8 @@ object LooseSaleContract extends Contract {
 object TaggedSaleContract extends Contract {
   private given Options = Options.release
   lazy val compiled = PlutusV3.compile(TaggedSale.validate)
-  lazy val blueprint = Blueprint.plutusV3[Sale, SaleAction](title = "TaggedSale", description = "paid by a tagged output",
+  lazy val blueprint = Blueprint.plutusV3[Sale, SaleAction](title = "TaggedSale",
+    description = "paid by a tagged output",
     version = "1.0.0", license = None, compiled = compiled)
 }
 
