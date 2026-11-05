@@ -42,6 +42,10 @@ Async.start(InThePage.fetching(Chain.overFetch(scripts[App](hash))))
   Notes besides (INFO: a signature, a time bound, a datum field, another redeemer not needed on this path) and REVIEW
   (redirect, underpay: a risk if the output is owed). In a project: `sbt okayUplcAttack` attacks every passing
   scenario; a finding fails the build unless `okay-uplc/attacks.json` lists it with a reason (`AttackScenarios`).
+- **`Explore`** — property mode: a passing transaction changed at random (amounts, payees, signers, time, datum
+  fields, the redeemer, tokens, the mint), each try run on the script and judged by YOUR rule of which transactions
+  should pass; disagreements shrunk to the fewest changes — TooLoose (a hole: wrong arithmetic) or TooStrict (a lock).
+  `Explore(script, context, rule)` in a test.
   **`SourceMap`** — Scala positions per term (pre-order), the lines around them.
 - **`Network`** — mainnet, preprod, preview: Scalus's chain parameters and the public APIs. **`Recorded`** — `Fetch`
   answered from a recording, for tests.

@@ -34,3 +34,8 @@
   output back than in the spent one: a queue, a registry) grown by 200 distinct entries in both, placed where the path
   keeps the old list (after the new entries if it prepends, before if it appends). Gate: LinearQueue fits (3% mem),
   QuadraticQueue (members unique, each against all) 785% mem → found; no list grows on a sale → no attack.
+- [x] **attacks-property** — `Explore(script, context, rule, tries, seed)`: random changes (amounts small to whole,
+  payee among the transaction's keys, a token ±1, an output removed / doubled, a signer added / removed, a bound moved
+  or set, a datum field moved / another key, another redeemer, the mint ±1), 1–3 a try; disagreements with the rule
+  shrunk (drop one change at a time), deduped. Gate ExploreSuite: SloppySale (1000 short passes) → TooLoose "output #0
+  −9 lovelace" and "datum field #1 moved", each one change; TaggedSale agrees with its rule in 400 tries.

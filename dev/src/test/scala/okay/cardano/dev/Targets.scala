@@ -33,6 +33,19 @@ object CarelessSale extends Validator {
     require(tx.outputs.exists(o => o.address.credential === seller), "unpaid")
 }
 
+/** pays the seller in a tagged output, but 1000 lovelace short passes: an off-by-a-thousand */
+@Compile
+object SloppySale extends Validator {
+  inline override def spend(datum: Option[Data], redeemer: Data, tx: TxInfo, ownRef: TxOutRef): Unit =
+    val d = datum.getOrFail("no datum").to[Sale]
+    val seller = Credential.PubKeyCredential(d.seller)
+    val tag = ownRef.toData
+    require(tx.outputs.exists(o => o.address.credential === seller && o.value.getLovelace + BigInt(1000) > d.price
+      && (o.datum match
+        case OutputDatum.OutputDatum(t) => t == tag
+        case _ => false)), "unpaid")
+}
+
 /** pays the seller in an output tagged with this UTxO */
 @Compile
 object TaggedSale extends Validator {
@@ -198,6 +211,7 @@ object Targets {
   lazy val looseSale = PlutusV3.compile(LooseSale.validate)
   lazy val taggedSale = PlutusV3.compile(TaggedSale.validate)
   lazy val carelessSale = PlutusV3.compile(CarelessSale.validate)
+  lazy val sloppySale = PlutusV3.compile(SloppySale.validate)
   lazy val strictCounter = PlutusV3.compile(StrictCounter.validate)
   lazy val unauthCounter = PlutusV3.compile(UnauthCounter.validate)
   lazy val stakeBlindCounter = PlutusV3.compile(StakeBlindCounter.validate)
