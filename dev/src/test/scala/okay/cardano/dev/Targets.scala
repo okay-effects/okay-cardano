@@ -11,6 +11,10 @@ import scalus.cardano.onchain.plutus.prelude.*
 /** the attacks' targets: each safe contract beside a copy with ONE check removed, whose attack must then succeed */
 case class Sale(seller: PubKeyHash, price: BigInt) derives FromData, ToData
 
+enum SaleAction derives FromData, ToData:
+  case Buy
+  case Cancel
+
 /** pays the seller, any output: double satisfaction */
 @Compile
 object LooseSale extends Validator {

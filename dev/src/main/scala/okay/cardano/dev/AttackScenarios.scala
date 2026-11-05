@@ -1,7 +1,7 @@
 package okay.cardano.dev
 
 import java.nio.file.{Files, Path}
-import okay.cardano.{Attacks, Scenario}
+import okay.cardano.{Attacks, Blueprints, Scenario}
 import scalus.cardano.blueprint.Contract
 
 /** A PROJECT'S CONTRACTS UNDER ATTACK (okay-uplc specs/attacks.md): every scenario expected to pass, changed the way
@@ -44,6 +44,24 @@ object AttackScenarios:
                   Some(Report(name, ts, None, links))
     }
 
+  /** the actions (the redeemer's constructors, by the blueprint) no passing scenario takes: paths the attacks never
+   * see — (validator, action) */
+  def uncovered(in: Path, contracts: Seq[Contract]): List[(String, String)] =
+    val taken = Scenarios.files(in).flatMap(f => Scenario.read(Files.readString(f)).toOption).filter(_.expect.passes)
+      .flatMap(s => s.redeemer match
+        case scalus.uplc.builtin.Data.Constr(i, _) => Some(s.validator -> i.toInt)
+        case _ => None).toSet
+    for
+      c <- contracts.toList
+      v <- Blueprints.read(c.blueprint.toJson()).toOption.toList.flatMap(_.validators)
+      (name, i) <- actions(v.redeemer) if !taken(v.title -> i)
+    yield v.title -> name
+
+  private def actions(s: Blueprints.Schema): List[(String, Int)] = s match
+    case Blueprints.Schema.AnyOf(_, alts) => alts.flatMap(actions)
+    case Blueprints.Schema.Constr(t, i, _) => List((if t.isEmpty then s"constructor $i" else t) -> i)
+    case _ => Nil
+
   /** the findings no one accepted: (scenario file, attack, link) */
   def findingsIn(in: Path, contracts: Seq[Contract], ok: List[Allowed]): List[(String, Attacks.Tried, String)] =
     for
@@ -76,6 +94,8 @@ object AttackScenarios:
             println(s"    ${t.attack.id} [$mark]: ${t.attack.claim}\n      step through: ${r.links(t.attack.id)}")
           }
     }
+    uncovered(Scenarios.dir, contracts).groupMap(_._1)(_._2).toList.sortBy(_._1).foreach((v, as) =>
+      println(s"- $v: no passing scenario takes ${as.mkString(", ")} — those paths are not attacked"))
     val found = findingsIn(Scenarios.dir, contracts, ok)
     println(s"okay-uplc attacks: ${rs.count(_.skipped.isEmpty)} scenarios attacked, ${found.size} findings")
     if found.nonEmpty then throw RuntimeException(s"${found.size} findings: fix them, or list them in $allowedFile " +

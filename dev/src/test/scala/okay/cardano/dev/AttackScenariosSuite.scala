@@ -17,7 +17,7 @@ object LooseSaleContract extends Contract {
 object TaggedSaleContract extends Contract {
   private given Options = Options.release
   lazy val compiled = PlutusV3.compile(TaggedSale.validate)
-  lazy val blueprint = Blueprint.plutusV3[Sale, Unit](title = "TaggedSale", description = "paid by a tagged output",
+  lazy val blueprint = Blueprint.plutusV3[Sale, SaleAction](title = "TaggedSale", description = "paid by a tagged output",
     version = "1.0.0", license = None, compiled = compiled)
 }
 
@@ -51,3 +51,9 @@ class AttackScenariosSuite extends munit.FunSuite:
     val rs = AttackScenarios.reports(project(failing, scenario("Nobody")), Seq(TaggedSaleContract))
     assertEquals(rs.map(_.file), List("s1.json"))
     assert(rs.head.skipped.exists(_.contains("Nobody")))
+
+  test("the actions no passing scenario takes are said: paths the attacks never see"):
+    val dir = project(scenario("TaggedSale"))
+    // the redeemer is SaleAction: the scenario takes Buy (constructor 0), Cancel is left
+    assertEquals(AttackScenarios.uncovered(dir, Seq(TaggedSaleContract)), List("TaggedSale" -> "Cancel"))
+    assertEquals(AttackScenarios.uncovered(project(), Seq(TaggedSaleContract)).map(_._2), List("Buy", "Cancel"))

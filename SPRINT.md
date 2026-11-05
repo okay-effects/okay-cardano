@@ -20,3 +20,6 @@
   (constructors 0–3, fields kept / none) — INFO: what this path does not need. `AttackScenarios` (dev): every passing
   scenario attacked on the debug build, HIGH findings fail unless okay-uplc/attacks.json lists them (scenario, attack,
   reason), each with a debugger link; sbt-okay-uplc `okayUplcAttack`. Tests: AttacksSuite 18, AttackScenariosSuite 3.
+- [x] **attacks-4a** — forged-state also for a state token under a policy of its own (a single token kept with the
+  state; an item sold away is not one); AttackScenarios.uncovered: the redeemer constructors (blueprint) no passing
+  scenario takes, printed by okayUplcAttack. AttacksSuite 20, AttackScenariosSuite 4.
