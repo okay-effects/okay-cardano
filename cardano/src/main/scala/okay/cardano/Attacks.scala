@@ -25,15 +25,19 @@ object Attacks:
   enum Severity:
     case High, Review
 
-  /** an exploit tried: what it changes, what accepting it means, and the runs of the script it needs */
-  final case class Attack(id: String, claim: String, severity: Severity, runs: List[ScriptContext])
+  /** an exploit tried: what it changes, what accepting it means, and the runs of the script it needs; `moot`: runs
+   * that, when they all pass, make the attack beside the point (double satisfaction of a script that pays no one) */
+  final case class Attack(id: String, claim: String, severity: Severity, runs: List[ScriptContext],
+    moot: List[ScriptContext] = Nil)
 
   /** one run's outcome */
   final case class Run(passes: Boolean, budget: ExUnits, logs: List[String])
 
   /** an attack and how the validator met it: `accepted` when every run passed */
-  final case class Tried(attack: Attack, runs: List[Run]):
-    def accepted: Boolean = runs.forall(_.passes)
+  final case class Tried(attack: Attack, runs: List[Run], mootRuns: List[Run] = Nil):
+    /** the attack does not apply: its moot runs all pass */
+    def moot: Boolean = mootRuns.nonEmpty && mootRuns.forall(_.passes)
+    def accepted: Boolean = !moot && runs.forall(_.passes)
     /** the trace the defence failed with: the last one of the first failing run */
     def defence: Option[String] = runs.find(!_.passes).map(_.logs.lastOption.getOrElse("(no trace)"))
 
@@ -59,7 +63,7 @@ object Attacks:
     val base = once(script, ctx, vm)
     if !base.passes then Left(s"the case does not pass${base.logs.lastOption.fold("")(l => s": $l")}; " +
       "attacks start from one the validator accepts")
-    else Right(all(ctx).map(a => Tried(a, a.runs.map(once(script, _, vm)))))
+    else Right(all(ctx).map(a => Tried(a, a.runs.map(once(script, _, vm)), a.moot.map(once(script, _, vm)))))
 
   def once(script: DeBruijnedProgram, ctx: ScriptContext, vm: PlutusVM): Run =
     val r = vm.evaluateScriptDebug(script $ ctx.toData)
@@ -68,7 +72,8 @@ object Attacks:
   // ---- the catalogue
 
   /** a second UTxO of this script, a copy of the spent one, spent in the same transaction with the outputs as they
-   * are; its value goes to the attacker. Both runs passing: one payment settles two UTxOs. */
+   * are; its value goes to the attacker. Both runs passing: one payment settles two UTxOs. Moot when the script
+   * accepts the transaction with no outputs but its own: it owes no one a payment to be satisfied twice. */
   def doubleSatisfaction(ctx: ScriptContext): Option[Attack] = spent(ctx).map { (ref, own, datum) =>
     val twin = TxOutRef(TxId(ByteString.fromHex("dd" * 32)), ref.idx)
     val tx = ctx.txInfo.copy(
@@ -78,7 +83,8 @@ object Attacks:
     Attack("double-satisfaction",
       "a second UTxO of this script, spent in the same transaction, is settled by the same outputs (its value to " +
         "the attacker): one payment pays for two", Severity.High,
-      List(ctx.copy(txInfo = tx), ScriptContext(tx, ctx.redeemer, ScriptInfo.SpendingScript(twin, datum))))
+      List(ctx.copy(txInfo = tx), ScriptContext(tx, ctx.redeemer, ScriptInfo.SpendingScript(twin, datum))),
+      moot = List(withOutputs(ctx, ctx.txInfo.outputs.toScalaList.filter(o => ownHash(ctx).exists(at(o, _))))))
   }
 
   /** each output to someone other than this script and the attacker, sent to the attacker instead */

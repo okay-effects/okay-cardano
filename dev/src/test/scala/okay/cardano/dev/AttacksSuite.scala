@@ -82,3 +82,16 @@ class AttacksSuite extends munit.FunSuite:
     val c = Targets.taggedSale
     val bad = sale(c).copy(txInfo = sale(c).txInfo.copy(outputs = PList.Nil))
     assert(Attacks.run(c.withErrorTraces.program.deBruijnedProgram, bad).left.exists(_.contains("unpaid")))
+
+  test("a script that pays no one: double satisfaction is moot, not a finding"):
+    val datum = alice.toData
+    val own = TxOut(Address.fromScriptHash(hash(GateContract.compiled)), Value.lovelace(2_000_000),
+      OutputDatum.OutputDatum(datum))
+    val tx = TxInfo.placeholder.copy(inputs = PList(TxInInfo(ref, own)), signatories = PList(alice))
+    val ctx = ScriptContext(tx, Data.unit, ScriptInfo.SpendingScript(ref, POption.Some(datum)))
+    val ds = tried(GateContract.compiled, ctx).find(_.attack.id == "double-satisfaction").get
+    assert(ds.moot && !ds.accepted)
+
+  test("a sale is not moot: without the payment it fails"):
+    val ds = tried(Targets.looseSale, sale(Targets.looseSale)).find(_.attack.id == "double-satisfaction").get
+    assert(!ds.moot && ds.accepted)

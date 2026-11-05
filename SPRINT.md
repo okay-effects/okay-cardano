@@ -13,4 +13,5 @@
   defends every HIGH attack; each target with ONE check removed loses exactly its attack (LooseSale →
   double-satisfaction, UnauthCounter → forged-state, StakeBlindCounter → redirect-stake, DustyCounter → token-dust,
   LoosePolicy → extra-mint other-name / sneaky-burn). Attacks run on the DEBUG build (release strips traces).
-  Not yet: TxInfo.redeemers for the twin input (validators rarely read it); a state token under a separate policy.
+  Double satisfaction is MOOT when the script passes with no outputs but its own (it pays no one: Vesting,
+  Multisig). Not yet: TxInfo.redeemers for the twin input (validators rarely read it); a state token under a separate policy.
