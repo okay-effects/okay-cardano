@@ -103,3 +103,8 @@ class AttacksSuite extends munit.FunSuite:
       val read = fromData[ScriptContext](ctx.toData)
       assertEquals(accepted(c, read), accepted(c, ctx))
       assert(accepted(c, read).nonEmpty)
+
+  test("a spend made by hand without the spent output: completed as the ledger gives it, then attacked"):
+    val c = Targets.looseSale
+    val bare = sale(c).copy(txInfo = sale(c).txInfo.copy(inputs = PList.Nil))
+    assert(accepted(c, bare).contains("double-satisfaction"))

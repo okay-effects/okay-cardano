@@ -58,8 +58,9 @@ object Attacks:
 
   /** the attacks tried on a script (its parameters applied); `Left` when the context itself is not accepted — attacks
    * start from a transaction the validator accepts */
-  def run(script: DeBruijnedProgram, ctx: ScriptContext, vm: PlutusVM = PlutusVM.makePlutusV3VM())
+  def run(script: DeBruijnedProgram, asked: ScriptContext, vm: PlutusVM = PlutusVM.makePlutusV3VM())
       : Either[String, List[Tried]] =
+    val ctx = complete(asked, hash(script))
     val base = once(script, ctx, vm)
     if !base.passes then Left(s"the case does not pass${base.logs.lastOption.fold("")(l => s": $l")}; " +
       "attacks start from one the validator accepts")
@@ -160,6 +161,22 @@ object Attacks:
   }
 
   // ---- helpers
+
+  /** a Plutus V3 script's hash, its parameters applied */
+  def hash(script: DeBruijnedProgram): ByteString =
+    scalus.cardano.ledger.Script.PlutusV3(ByteString.fromArray(script.cborEncoded)).scriptHash
+
+  /** a context as the ledger gives it: a spend made by hand without the spent output among the inputs gets it — at
+   * the script's address, the datum inline, 2 ada */
+  def complete(ctx: ScriptContext, script: ByteString): ScriptContext = ctx.scriptInfo match
+    case ScriptInfo.SpendingScript(ref, datum)
+        if !ctx.txInfo.inputs.toScalaList.exists(_.outRef.toData == ref.toData) =>
+      val own = TxOut(Address.fromScriptHash(script), Value.lovelace(2_000_000),
+        datum match
+          case POption.Some(d) => OutputDatum.OutputDatum(d)
+          case _ => OutputDatum.NoOutputDatum)
+      ctx.copy(txInfo = ctx.txInfo.copy(inputs = PList.from(TxInInfo(ref, own) :: ctx.txInfo.inputs.toScalaList)))
+    case _ => ctx
 
   /** the script's own hash: the spent output's script, or the minting policy */
   def ownHash(ctx: ScriptContext): Option[ByteString] = ctx.scriptInfo match
