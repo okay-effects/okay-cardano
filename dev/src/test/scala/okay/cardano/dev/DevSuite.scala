@@ -102,10 +102,12 @@ class DevSuite extends munit.FunSuite:
     finally { server.stop(); page.stop(0) }
 
   test("the project's contracts found on the class path, or named"):
-    assertEquals(Contracts.found().map(_.getClass.getName), List("okay.cardano.dev.GateContract$"))
+    assertEquals(Contracts.found().map(_.getClass.getName).toSet, Set("okay.cardano.dev.GateContract$",
+      "okay.cardano.dev.LooseSaleContract$", "okay.cardano.dev.TaggedSaleContract$"))
     assertEquals(Contracts.named(List("okay.cardano.dev.GateContract")), List(GateContract))
     val dir = Path.of(classOf[GateContract.type].getProtectionDomain.getCodeSource.getLocation.toURI)
-    assertEquals(Contracts.of(List("--classes", dir.toString)), List(GateContract))
+    assertEquals(Contracts.of(List("--classes", dir.toString)).toSet,
+      Set(GateContract, LooseSaleContract, TaggedSaleContract))
 
   test("a contract compiled again from its SIR: the same program as Scalus's, other builds other programs"):
     val compiled = Workspace.compiled(GateContract)

@@ -12,6 +12,8 @@ import sbt.Keys._
   *   - `okayUplcWorkspace` — the contracts (every Scalus `Contract` object, or `okayUplcContracts`) written as the
   *     debugger's workspace, `target/okay-uplc/workspace.json`; `~okayUplcWorkspace` keeps it fresh;
   *   - `okayUplcVerify` — every scenario in `okay-uplc/scenarios` checked; a wrong one fails with its link;
+  *   - `okayUplcAttack` — every passing scenario attacked (okay-cardano `Attacks`); a finding fails the build unless
+  *     `okay-uplc/attacks.json` lists it with a reason; each one with a link to its run;
   *   - `okayUplcServe` — the workspace written, then the dev server (http://127.0.0.1:8790, the page from it too);
   *     it runs until stopped; `okayUplcStart` the same in the background of an sbt shell (`jobStop` ends it).
   */
@@ -23,6 +25,8 @@ object OkayUplcPlugin extends AutoPlugin {
     val okayUplcContracts = settingKey[Seq[String]]("the contract objects, by name; empty: every one found")
     val okayUplcWorkspace = taskKey[Unit]("write okay-uplc's workspace: the contracts' debug builds and sources")
     val okayUplcVerify = taskKey[Unit]("check every scenario in okay-uplc/scenarios against what it expects")
+    val okayUplcAttack =
+      taskKey[Unit]("attack every passing scenario; findings fail unless okay-uplc/attacks.json lists them")
     val okayUplcServe = taskKey[Unit]("write the workspace and serve it, and the page, on http://127.0.0.1:8790")
     val okayUplcStart = taskKey[Unit]("okayUplcServe in the background of an sbt shell")
   }
@@ -52,6 +56,10 @@ object OkayUplcPlugin extends AutoPlugin {
     okayUplcVerify := Def.taskDyn {
       val args = classes.value +: okayUplcContracts.value
       (Test / runMain).toTask((("okay.cardano.dev.Scenarios") +: args).mkString(" ", " ", ""))
+    }.value,
+    okayUplcAttack := Def.taskDyn {
+      val args = classes.value +: okayUplcContracts.value
+      (Test / runMain).toTask((("okay.cardano.dev.AttackScenarios") +: args).mkString(" ", " ", ""))
     }.value,
     okayUplcServe := Def.sequential(okayUplcWorkspace, (Test / runMain).toTask(" okay.cardano.dev.DevServer")).value,
     okayUplcStart := Def.sequential(okayUplcWorkspace,

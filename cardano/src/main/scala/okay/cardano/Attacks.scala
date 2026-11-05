@@ -1,7 +1,7 @@
 package okay.cardano
 
 import scalus.cardano.ledger.ExUnits
-import scalus.cardano.onchain.plutus.v1.{Address, PubKeyHash, StakingCredential}
+import scalus.cardano.onchain.plutus.v1.{Address, IntervalBound, IntervalBoundType, PubKeyHash, StakingCredential}
 import scalus.cardano.onchain.plutus.v2.OutputDatum
 import scalus.cardano.onchain.plutus.v3.*
 import scalus.cardano.onchain.plutus.prelude.{List as PList, Option as POption}
@@ -21,9 +21,10 @@ import scalus.uplc.eval.PlutusVM
 object Attacks:
 
   /** HIGH: money or state at risk when accepted; REVIEW: a risk only if the changed part is one the contract owes (a
-   * payment, not the transaction's change) — the owner reads it */
+   * payment, not the transaction's change) — the owner reads it; INFO: what the validator does not need on this path
+   * (a signature, a bound, a datum field, another action) — a map of its checks, a risk only against its intent */
   enum Severity:
-    case High, Review
+    case High, Review, Info
 
   /** an exploit tried: what it changes, what accepting it means, and the runs of the script it needs; `moot`: runs
    * that, when they all pass, make the attack beside the point (double satisfaction of a script that pays no one) */
@@ -53,7 +54,8 @@ object Attacks:
   def all(ctx: ScriptContext): List[Attack] =
     ownHash(ctx).toList.flatMap { own =>
       List(doubleSatisfaction(ctx), redirect(ctx, own), redirectStake(ctx, own), stealContinuing(ctx, own),
-        tokenDust(ctx, own), forgedState(ctx, own), extraMint(ctx, own), sneakyBurn(ctx, own)).flatten
+        tokenDust(ctx, own), forgedState(ctx, own), extraMint(ctx, own), sneakyBurn(ctx, own), underpay(ctx, own),
+        dropSigner(ctx), unboundedTime(ctx), noDatum(ctx), datumFields(ctx), otherRedeemer(ctx)).flatten
     }
 
   /** the attacks tried on a script (its parameters applied); `Left` when the context itself is not accepted — attacks
@@ -160,6 +162,78 @@ object Attacks:
       List(minted1(ctx, Value(own, ByteString.fromString("sneaky"), 1)))))
   }
 
+  /** each output to someone other than this script and the attacker, one lovelace less; then each of its tokens one
+   * less */
+  def underpay(ctx: ScriptContext, own: ByteString): List[Attack] =
+    outputs(ctx).filter((o, _) => !at(o, own) && o.address.toData != attackerAddress.toData).flatMap { (o, i) =>
+      val lovelace = Option.when(o.value.getLovelace > 0)(Attack(s"underpay #$i", s"output #$i one lovelace short " +
+        "passes: its amount is not checked — a vulnerability if the contract owes it", Severity.Review,
+        List(withOutputs(ctx, replace(ctx, i, o.copy(value = o.value - Value.lovelace(1)))))))
+      val tokens = o.value.withoutLovelace.flatten.toScalaList.filter(_._3 > 0).map { (p, n, _) =>
+        Attack(s"underpay #$i ${show(n)}", s"output #$i one ${show(n)} short passes: that token's amount is not " +
+          "checked", Severity.Review, List(withOutputs(ctx, replace(ctx, i, o.copy(value = o.value - Value(p, n, 1))))))
+      }
+      lovelace.toList ++ tokens
+    }
+
+  /** each signatory dropped in turn */
+  def dropSigner(ctx: ScriptContext): List[Attack] =
+    val signers = ctx.txInfo.signatories.toScalaList
+    signers.zipWithIndex.map { (k, i) =>
+      Attack(s"drop-signer ${k.hash.toHex.take(8)}", s"the transaction passes without the signature of " +
+        s"${k.hash.toHex.take(8)}…: this path does not need it", Severity.Info,
+        List(ctx.copy(txInfo = ctx.txInfo.copy(signatories = PList.from(signers.patch(i, Nil, 1))))))
+    }
+
+  /** a finite bound of the validity range made infinite: the lower, then the upper */
+  def unboundedTime(ctx: ScriptContext): List[Attack] =
+    val r = ctx.txInfo.validRange
+    def finite(b: IntervalBound) = b.boundType match
+      case IntervalBoundType.Finite(_) => true
+      case _ => false
+    def at(range: Interval) = List(ctx.copy(txInfo = ctx.txInfo.copy(validRange = range)))
+    List(
+      Option.when(finite(r.from))(Attack("unbounded-time from", "the transaction passes valid from the beginning of " +
+        "time: this path does not check the lower bound (a deadline it should wait for?)", Severity.Info,
+        at(Interval(IntervalBound(IntervalBoundType.NegInf, true), r.to)))),
+      Option.when(finite(r.to))(Attack("unbounded-time to", "the transaction passes valid forever: this path does " +
+        "not check the upper bound", Severity.Info,
+        at(Interval(r.from, IntervalBound(IntervalBoundType.PosInf, true)))))
+    ).flatten
+
+  /** the spent output without its datum */
+  def noDatum(ctx: ScriptContext): Option[Attack] = spent(ctx).collect { case (ref, in, POption.Some(_)) =>
+    Attack("no-datum", "the output passes with no datum at all: the validator does not read it on this path",
+      Severity.Info, List(withDatum(ctx, ref, in, None)))
+  }
+
+  /** each integer or bytes field of the datum changed */
+  def datumFields(ctx: ScriptContext): List[Attack] = spent(ctx).toList.flatMap {
+    case (ref, in, POption.Some(Data.Constr(tag, args))) =>
+      val fields = args.toScalaList
+      fields.zipWithIndex.flatMap { (d, k) =>
+        changed(d).map { c =>
+          Attack(s"datum-field #$k", s"the datum's field #$k changed (${short(d)} → ${short(c)}) passes: this " +
+            "path does not read it", Severity.Info,
+            List(withDatum(ctx, ref, in, Some(Data.Constr(tag, PList.from(fields.updated(k, c)))))))
+        }
+      }
+    case _ => Nil
+  }
+
+  /** the redeemer as another constructor (0 to 3), its fields kept, then none */
+  def otherRedeemer(ctx: ScriptContext): List[Attack] = ctx.redeemer match
+    case Data.Constr(tag, args) =>
+      (0 to 3).filter(j => BigInt(j) != tag).toList.flatMap { j =>
+        val same = Data.Constr(BigInt(j), args)
+        val bare = Data.Constr(BigInt(j), PList.Nil)
+        (same :: (if args.isEmpty then Nil else List(bare))).map { r =>
+          Attack(s"other-redeemer ${short(r)}", s"the redeemer ${short(r)} passes the same transaction: another " +
+            "action is allowed here — intended?", Severity.Info, List(ctx.copy(redeemer = r)))
+        }
+      }
+    case _ => Nil
+
   // ---- helpers
 
   /** a Plutus V3 script's hash, its parameters applied */
@@ -226,3 +300,27 @@ object Attacks:
   private def show(name: ByteString): String =
     val s = new String(name.bytes, "UTF-8")
     if s.forall(c => c >= ' ' && c < '\u007f') && s.nonEmpty then s"\"$s\"" else name.toHex
+
+  /** the spent output's datum replaced (inline in the output, and as the script is given it), or removed */
+  private def withDatum(ctx: ScriptContext, ref: TxOutRef, in: TxInInfo, d: Option[Data]): ScriptContext =
+    val od = d.fold(OutputDatum.NoOutputDatum)(OutputDatum.OutputDatum(_))
+    val tx = ctx.txInfo.copy(inputs = ctx.txInfo.inputs.map(i =>
+      if i.outRef.toData == ref.toData then i.copy(resolved = i.resolved.copy(datum = od)) else i))
+    ScriptContext(tx, ctx.redeemer, ScriptInfo.SpendingScript(ref, d.fold(POption.None)(POption.Some(_))))
+
+  /** a field changed the least: an integer plus one, bytes with the first bit flipped */
+  private def changed(d: Data): Option[Data] = d match
+    case Data.I(n) => Some(Data.I(n + 1))
+    case Data.B(b) =>
+      val bytes = if b.bytes.isEmpty then Array[Byte](0) else b.bytes.clone()
+      bytes(0) = (bytes(0) ^ 1).toByte
+      Some(Data.B(ByteString.fromArray(bytes)))
+    case _ => None
+
+  private def short(d: Data): String =
+    val s = d match
+      case Data.I(n) => n.toString
+      case Data.B(b) => b.toHex
+      case Data.Constr(t, as) => s"Constr($t${if as.isEmpty then "" else ", …"})"
+      case other => other.toString
+    if s.length > 18 then s.take(16) + "…" else s

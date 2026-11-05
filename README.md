@@ -39,6 +39,9 @@ Async.start(InThePage.fetching(Chain.overFetch(scripts[App](hash))))
   redirect, stake redirect, stealing the continuing output, token dust, forged state, extra mint, sneaky burn); each
   attack run on the script: ACCEPTED is a finding, DEFENDED shows the trace it failed with.
   `Attacks.run(script, context)`.
+  Notes besides (INFO: a signature, a time bound, a datum field, another redeemer not needed on this path) and REVIEW
+  (redirect, underpay: a risk if the output is owed). In a project: `sbt okayUplcAttack` attacks every passing
+  scenario; a finding fails the build unless `okay-uplc/attacks.json` lists it with a reason (`AttackScenarios`).
   **`SourceMap`** — Scala positions per term (pre-order), the lines around them.
 - **`Network`** — mainnet, preprod, preview: Scalus's chain parameters and the public APIs. **`Recorded`** — `Fetch`
   answered from a recording, for tests.

@@ -15,3 +15,8 @@
   LoosePolicy → extra-mint other-name / sneaky-burn). Attacks run on the DEBUG build (release strips traces).
   Double satisfaction is MOOT when the script passes with no outputs but its own (it pays no one: Vesting,
   Multisig). Not yet: TxInfo.redeemers for the twin input (validators rarely read it); a state token under a separate policy.
+- [x] **attacks-3** (okay-uplc specs/attacks.md) — the rest of the catalogue: underpay #i (lovelace, each token;
+  REVIEW), drop-signer, unbounded-time from/to, no-datum, datum-field #k (int +1, bytes bit flipped), other-redeemer
+  (constructors 0–3, fields kept / none) — INFO: what this path does not need. `AttackScenarios` (dev): every passing
+  scenario attacked on the debug build, HIGH findings fail unless okay-uplc/attacks.json lists them (scenario, attack,
+  reason), each with a debugger link; sbt-okay-uplc `okayUplcAttack`. Tests: AttacksSuite 18, AttackScenariosSuite 3.

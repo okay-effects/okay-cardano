@@ -20,6 +20,15 @@ object LooseSale extends Validator {
     require(tx.outputs.exists(o => o.address.credential === seller && o.value.getLovelace >= d.price), "unpaid")
 }
 
+/** pays the seller something: the amount not checked */
+@Compile
+object CarelessSale extends Validator {
+  inline override def spend(datum: Option[Data], redeemer: Data, tx: TxInfo, ownRef: TxOutRef): Unit =
+    val d = datum.getOrFail("no datum").to[Sale]
+    val seller = Credential.PubKeyCredential(d.seller)
+    require(tx.outputs.exists(o => o.address.credential === seller), "unpaid")
+}
+
 /** pays the seller in an output tagged with this UTxO */
 @Compile
 object TaggedSale extends Validator {
@@ -119,6 +128,7 @@ object Targets {
   private given Options = Options.release
   lazy val looseSale = PlutusV3.compile(LooseSale.validate)
   lazy val taggedSale = PlutusV3.compile(TaggedSale.validate)
+  lazy val carelessSale = PlutusV3.compile(CarelessSale.validate)
   lazy val strictCounter = PlutusV3.compile(StrictCounter.validate)
   lazy val unauthCounter = PlutusV3.compile(UnauthCounter.validate)
   lazy val stakeBlindCounter = PlutusV3.compile(StakeBlindCounter.validate)

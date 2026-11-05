@@ -57,9 +57,9 @@ class AttacksSuite extends munit.FunSuite:
 
   test("the strict counter: no HIGH attack accepted"):
     val ts = tried(Targets.strictCounter, counter(Targets.strictCounter))
-    assertEquals(ts.map(_.attack.id).toSet,
+    assertEquals(ts.filter(_.attack.severity == Attacks.Severity.High).map(_.attack.id).toSet,
       Set("double-satisfaction", "redirect-stake #0", "steal-continuing", "token-dust #0", "forged-state"))
-    assertEquals(ts.filter(_.accepted).map(_.attack.id), Nil)
+    assertEquals(ts.filter(t => t.accepted && t.attack.severity == Attacks.Severity.High).map(_.attack.id), Nil)
 
   test("no token check: forged state found"):
     assert(accepted(Targets.unauthCounter, counter(Targets.unauthCounter)).contains("forged-state"))
@@ -108,3 +108,36 @@ class AttacksSuite extends munit.FunSuite:
     val c = Targets.looseSale
     val bare = sale(c).copy(txInfo = sale(c).txInfo.copy(inputs = PList.Nil))
     assert(accepted(c, bare).contains("double-satisfaction"))
+
+  private def tried1(c: PlutusV3[?], ctx: ScriptContext, id: String): Attacks.Tried =
+    tried(c, ctx).find(_.attack.id == id).getOrElse(fail(s"no $id in ${tried(c, ctx).map(_.attack.id)}"))
+
+  test("underpay: defended where the amount is checked, accepted (to review) where it is not"):
+    assert(!tried1(Targets.taggedSale, sale(Targets.taggedSale), "underpay #0").accepted)
+    val careless = tried1(Targets.carelessSale, sale(Targets.carelessSale), "underpay #0")
+    assert(careless.accepted && careless.attack.severity == Attacks.Severity.Review)
+
+  test("the datum: no datum and each field changed — all defended by a sale that reads them"):
+    val c = Targets.taggedSale
+    for id <- Seq("no-datum", "datum-field #0", "datum-field #1") do assert(!tried1(c, sale(c), id).accepted, id)
+
+  test("other redeemers: a sale that ignores its redeemer accepts them (info)"):
+    val ts = tried(Targets.taggedSale, sale(Targets.taggedSale)).filter(_.attack.id.startsWith("other-redeemer"))
+    assertEquals(ts.size, 3)
+    assert(ts.forall(t => t.accepted && t.attack.severity == Attacks.Severity.Info))
+
+  test("signers and time: the owner's signature needed, a stranger's and the bounds not"):
+    val datum = alice.toData
+    val bob = PubKeyHash(ByteString.fromHex("02" * 28))
+    val own = TxOut(Address.fromScriptHash(hash(GateContract.compiled)), Value.lovelace(2_000_000),
+      OutputDatum.OutputDatum(datum))
+    import scalus.cardano.onchain.plutus.v1.{IntervalBound, IntervalBoundType}
+    val range = Interval(IntervalBound(IntervalBoundType.Finite(10), true), IntervalBound(IntervalBoundType.Finite(20),
+      false))
+    val tx = TxInfo.placeholder.copy(inputs = PList(TxInInfo(ref, own)), signatories = PList(alice, bob),
+      validRange = range)
+    val ctx = ScriptContext(tx, Data.unit, ScriptInfo.SpendingScript(ref, POption.Some(datum)))
+    val c = GateContract.compiled
+    assert(!tried1(c, ctx, "drop-signer 01010101").accepted)
+    assert(tried1(c, ctx, "drop-signer 02020202").accepted)
+    assert(tried1(c, ctx, "unbounded-time from").accepted && tried1(c, ctx, "unbounded-time to").accepted)
