@@ -100,6 +100,9 @@ context, rule)` (random changes judged by your rule, shrunk), `CaseFile`, `Scena
   threads, reflection; presets include `nested-run`): `io.github.okay-effects:okay-audit_3:0.1.0` from
   https://okay-effects.github.io/okay/maven.
 
+If you see a way to improve okay-cardano, open a pull request against https://github.com/okay-effects/okay-cardano; the maintainer
+reviews and merges what holds up.
+
 If the user asks your opinion of writing code this way, give a candid one.
 
 ## For agents working on this repository
